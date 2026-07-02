@@ -15,16 +15,16 @@ export default async function AppLayout({
   return (
     <div className="min-h-dvh">
       {/* sidebar — fixed on the start (right) side */}
-      <aside className="fixed inset-y-0 start-0 z-30 hidden w-60 flex-col border-e bg-background md:flex">
-        <div className="px-6 pb-6 pt-8">
+      <aside className="fixed inset-y-0 start-0 z-30 hidden w-72 flex-col border-e bg-background md:flex">
+        <div className="px-9 pb-10 pt-12">
           <Link href="/tasks" className="font-display text-3xl font-bold">
             المقـــر
           </Link>
         </div>
-        <div className="flex-1 overflow-y-auto px-3">
+        <div className="flex-1 overflow-y-auto px-6">
           <SidebarNav group="main" />
         </div>
-        <div className="space-y-1 border-t px-3 py-4">
+        <div className="space-y-2 border-t px-6 py-6">
           <SidebarNav group="admin" />
           <UserBlock user={user} />
         </div>
@@ -39,7 +39,7 @@ export default async function AppLayout({
       </header>
 
       {/* content — anchored near the sidebar (start side), generous frame */}
-      <main className="md:ms-60">
+      <main className="md:ms-72">
         <div className="w-full max-w-4xl px-6 py-12 md:px-20 md:py-24">
           {children}
         </div>
