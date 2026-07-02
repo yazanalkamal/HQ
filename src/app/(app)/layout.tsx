@@ -38,9 +38,9 @@ export default async function AppLayout({
         <SidebarNavCompact />
       </header>
 
-      {/* content — generous frame away from the walls */}
+      {/* content — anchored near the sidebar (start side), generous frame */}
       <main className="md:ms-60">
-        <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12 md:py-16">
+        <div className="w-full max-w-4xl px-6 py-12 md:px-20 md:py-24">
           {children}
         </div>
       </main>

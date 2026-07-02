@@ -1,4 +1,5 @@
 import { decodeIdToken, type OAuth2Tokens } from "arctic";
+import { and, eq, ne } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -56,6 +57,13 @@ export async function GET(request: Request): Promise<Response> {
     });
     redirect("/signin?error=denied");
   }
+
+  // Single-user system: a row with this email but a different Google id is
+  // stale (e.g. a dev seed). Remove it so the upsert below can't collide on
+  // the email unique constraint; its sessions cascade away with it.
+  await db
+    .delete(users)
+    .where(and(eq(users.email, email), ne(users.id, claims.sub)));
 
   await db
     .insert(users)
