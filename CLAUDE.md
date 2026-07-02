@@ -32,10 +32,22 @@ components as props — the client module must import them itself.
   in `src/fonts/index.ts`). `font-sans` (Thmanyah Sans) for UI/body,
   `.font-display` (Serif Display) ONLY for section headings, `.font-serif`
   (Serif Text) for long-form note reading.
-- **Tatweel identity:** big headings carry the kashida stretch — المهـــام،
-  الملاحظـــات، الماليـــة، الخطـــط، المقـــر. Insert "ـ" only between letters
-  that actually connect. `PageHeader` (`src/components/page-header.tsx`) is
-  the one place Serif Display appears.
+- **Thmanyah typography rules** (from دليل جماليات خط ثمانية — the PDF in
+  `assets/`; violating these makes the font look wrong):
+  - **Kashida "ـ"**: typing tatweel gives the slanted kashida automatically
+    (rlig). Place it ONLY at the last joint of a word (between the final
+    letter and the one before it), once per word, never stretched to max,
+    sparingly per screen, NEVER in running/body text. Headings: المهـــام،
+    الملاحظـــات، الماليـــة، الخطـــط، المقـــر.
+  - **الأحرف المرسلة** (`.tarsil` = font-feature-settings "salt"): flowing
+    final-letter tails. Single display words only (wordmark, PageHeader
+    titles) — never two adjacent words, never running text.
+  - **Serif Text** is for long-form reading (notes view); no kashida there.
+  - **Riyal**: the font ships the NEW official symbol on U+FDFC — use
+    `formatSAR()`/`RIYAL` from `src/lib/currency.ts` in text; the SVG
+    `<RiyalSymbol />` only where Thmanyah isn't guaranteed.
+  `PageHeader` (`src/components/page-header.tsx`) is the one place Serif
+  Display appears.
 - **Layout:** content sits in a centered `max-w-4xl` column with generous
   padding (`px-6 py-10 md:px-12 md:py-16`) — the "margin from the walls" is a
   hard requirement. Sidebar is fixed on the START (right) side; always use

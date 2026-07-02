@@ -25,7 +25,7 @@ export default async function SignInPage({
     <main className="flex min-h-dvh items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-10 text-center">
         <div className="space-y-3">
-          <h1 className="font-display text-6xl font-bold">المقـــر</h1>
+          <h1 className="font-display tarsil text-6xl font-bold">المقـــر</h1>
           <p className="text-sm text-muted-foreground">
             مهامك، ملاحظاتك، ماليتك، وخططك — في مكان واحد.
           </p>

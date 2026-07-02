@@ -1,6 +1,8 @@
 /**
  * Official Saudi Riyal symbol (Saudi Central Bank, 2025 — public domain).
- * Thmanyah has no glyph for U+20C1, so money renders this inline SVG.
+ * NOTE: inside Thmanyah-rendered text prefer the font's own glyph via
+ * formatSAR()/RIYAL (U+FDFC in src/lib/currency.ts). This SVG is for
+ * contexts where the font isn't guaranteed (favicons, emails, charts).
  * Inherits color and scales with font-size.
  */
 export function RiyalSymbol({ className }: { className?: string }) {

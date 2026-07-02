@@ -107,4 +107,12 @@
   .font-serif {
     font-family: var(--font-serif);
   }
+  /*
+   * الأحرف المرسلة — Thmanyah's flowing final-letter tails (salt/ss01).
+   * Guide rules: single display words only (wordmark, section titles);
+   * never on adjacent words, never in running text.
+   */
+  .tarsil {
+    font-feature-settings: "salt";
+  }
 }
