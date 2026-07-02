@@ -1,0 +1,14 @@
+# Add this vhost to the VPS Caddyfile (auto-HTTPS via Let's Encrypt).
+# DNS: A record  hq.al-kamal.net → VPS IP  (proxy off if using Cloudflare orange cloud, at least for first issuance)
+
+hq.al-kamal.net {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3100
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

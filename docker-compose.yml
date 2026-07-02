@@ -1,0 +1,54 @@
+# Production compose for the VPS.
+# No database ports are published; the app listens on 127.0.0.1 only —
+# Caddy (host) terminates HTTPS for hq.al-kamal.net and proxies to it.
+#
+# NOTE: docker-compose.override.yml is LOCAL DEV ONLY (publishes the DB port)
+# and is git-ignored — it must never reach the VPS. (Same rule as streambot.)
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hq}
+      POSTGRES_DB: ${POSTGRES_DB:-hq}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hq} -d ${POSTGRES_DB:-hq}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hq}:${POSTGRES_PASSWORD:-hq}@postgres:5432/${POSTGRES_DB:-hq}
+      APP_URL: ${APP_URL:-https://hq.al-kamal.net}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      ALLOWED_EMAIL: ${ALLOWED_EMAIL}
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-off migration runner:  docker compose run --rm migrate
+  migrate:
+    build:
+      context: .
+      target: migrate
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hq}:${POSTGRES_PASSWORD:-hq}@postgres:5432/${POSTGRES_DB:-hq}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
