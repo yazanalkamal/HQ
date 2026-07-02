@@ -8,6 +8,13 @@
       "when": 1783019754628,
       "tag": "0000_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783021868698,
+      "tag": "0001_tasks-notes",
+      "breakpoints": true
     }
   ]
 }

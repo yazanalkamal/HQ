@@ -5,6 +5,11 @@ import {
   jsonb,
   bigserial,
   index,
+  uuid,
+  date,
+  boolean,
+  smallint,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -60,5 +65,72 @@ export const auditLog = pgTable(
   (t) => [index("audit_at_idx").on(t.at)],
 );
 
+// ── المهام / tasks ────────────────────────────────────────────────────────────
+
+/** Areas (مجالات) — one-level grouping for tasks: شخصي، البث، الجامعة… */
+export const areas = pgTable("areas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  /** key into the fixed AREA_COLORS palette, not a raw CSS color */
+  color: text("color").notNull().default("gray"),
+  sortOrder: doublePrecision("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Priorities: 0 عادية · 1 مهمة · 2 عاجلة */
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    areaId: uuid("area_id").references(() => areas.id, { onDelete: "set null" }),
+    dueDate: date("due_date"), // date-only; time lives in dueTime when set
+    dueTime: text("due_time"), // "HH:mm" or null
+    priority: smallint("priority").notNull().default(0),
+    done: boolean("done").notNull().default(false),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    sortOrder: doublePrecision("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("tasks_due_idx").on(t.done, t.dueDate), index("tasks_area_idx").on(t.areaId)],
+);
+
+export const subtasks = pgTable(
+  "subtasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    done: boolean("done").notNull().default(false),
+    sortOrder: doublePrecision("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("subtasks_task_idx").on(t.taskId)],
+);
+
+// ── الملاحظات / notes ─────────────────────────────────────────────────────────
+
+export const notes = pgTable(
+  "notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""), // Markdown source
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notes_updated_idx").on(t.updatedAt), index("notes_task_idx").on(t.taskId)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+export type Area = typeof areas.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
+export type Subtask = typeof subtasks.$inferSelect;
+export type Note = typeof notes.$inferSelect;

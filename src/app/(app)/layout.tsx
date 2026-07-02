@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CommandPalette } from "@/components/shell/command-palette";
+import { SearchButton } from "@/components/shell/search-button";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { SidebarNavCompact } from "@/components/shell/sidebar-nav-compact";
 import { UserBlock } from "@/components/shell/user-block";
@@ -16,10 +18,13 @@ export default async function AppLayout({
     <div className="min-h-dvh">
       {/* sidebar — fixed on the start (right) side */}
       <aside className="fixed inset-y-0 start-0 z-30 hidden w-72 flex-col border-e bg-background md:flex">
-        <div className="px-9 pb-10 pt-12">
+        <div className="px-9 pb-8 pt-12">
           <Link href="/today" className="font-display tarsil text-3xl font-bold">
             المقـــر
           </Link>
+        </div>
+        <div className="px-6 pb-4">
+          <SearchButton />
         </div>
         <div className="flex-1 overflow-y-auto px-6">
           <SidebarNav group="main" />
@@ -35,7 +40,10 @@ export default async function AppLayout({
         <Link href="/today" className="font-display tarsil text-2xl font-bold">
           المقـــر
         </Link>
-        <SidebarNavCompact />
+        <div className="flex items-center gap-1">
+          <SearchButton compact />
+          <SidebarNavCompact />
+        </div>
       </header>
 
       {/* content — anchored near the sidebar (start side), generous frame */}
@@ -44,6 +52,8 @@ export default async function AppLayout({
           {children}
         </div>
       </main>
+
+      <CommandPalette />
     </div>
   );
 }
