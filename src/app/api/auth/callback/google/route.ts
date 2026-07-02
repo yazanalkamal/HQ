@@ -89,5 +89,5 @@ export async function GET(request: Request): Promise<Response> {
     ip: meta.ip,
   });
 
-  redirect("/tasks");
+  redirect("/today");
 }

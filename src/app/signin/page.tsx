@@ -16,7 +16,7 @@ export default async function SignInPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { session } = await getCurrentSession();
-  if (session) redirect("/tasks");
+  if (session) redirect("/today");
 
   const { error } = await searchParams;
   const errorMessage = error ? (ERRORS[error] ?? ERRORS.exchange) : null;

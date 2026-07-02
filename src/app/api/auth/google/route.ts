@@ -14,7 +14,7 @@ const OAUTH_COOKIE = {
 
 export async function GET(): Promise<Response> {
   const { session } = await getCurrentSession();
-  if (session) redirect("/tasks");
+  if (session) redirect("/today");
 
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
