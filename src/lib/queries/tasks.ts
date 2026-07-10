@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { areas, plans, subtasks, tasks, type Area, type Subtask, type Task } from "@/db/schema";
 import { addDaysISO, todayISO } from "@/lib/dates";
@@ -153,4 +153,103 @@ export async function viewCounts(areaId?: string): Promise<Record<TaskView, numb
     tasksDone(areaId),
   ]);
   return { today: t.length, upcoming: u.length, later: l.length, done: d.length };
+}
+
+// ── day-board queries (المهام redesign) ───────────────────────────────────────
+
+/** All tasks whose due date IS `day` — open and done (progress needs both). */
+export async function tasksForDay(day: string, areaId?: string): Promise<TaskWithMeta[]> {
+  const rows = await baseSelect()
+    .where(and(eq(tasks.dueDate, day), areaId ? eq(tasks.areaId, areaId) : undefined))
+    .orderBy(asc(tasks.done), ...openOrder);
+  return withMeta(rows);
+}
+
+/** Open tasks overdue relative to `today` (for the pinned red block). */
+export async function tasksOverdue(today: string, areaId?: string): Promise<TaskWithMeta[]> {
+  const rows = await baseSelect()
+    .where(
+      and(
+        eq(tasks.done, false),
+        lt(tasks.dueDate, today),
+        areaId ? eq(tasks.areaId, areaId) : undefined,
+      ),
+    )
+    .orderBy(asc(tasks.dueDate), ...openOrder);
+  return withMeta(rows);
+}
+
+/** Open tasks with no date at all. */
+export async function tasksUndated(areaId?: string): Promise<TaskWithMeta[]> {
+  const rows = await baseSelect()
+    .where(
+      and(eq(tasks.done, false), isNull(tasks.dueDate), areaId ? eq(tasks.areaId, areaId) : undefined),
+    )
+    .orderBy(...openOrder);
+  return withMeta(rows);
+}
+
+export type DayStripData = {
+  days: { date: string; open: number; done: number }[];
+  overdueCount: number;
+  undatedCount: number;
+  doneTotal: number;
+};
+
+/** Everything the week strip needs, in one sweep. */
+export async function weekStrip(
+  weekStart: string,
+  today: string,
+  areaId?: string,
+): Promise<DayStripData> {
+  const weekEnd = addDaysISO(weekStart, 6);
+  const [inWeek, overdue, undated, doneAll] = await Promise.all([
+    db
+      .select({ dueDate: tasks.dueDate, done: tasks.done })
+      .from(tasks)
+      .where(
+        and(
+          gte(tasks.dueDate, weekStart),
+          lte(tasks.dueDate, weekEnd),
+          areaId ? eq(tasks.areaId, areaId) : undefined,
+        ),
+      ),
+    db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.done, false),
+          lt(tasks.dueDate, today),
+          areaId ? eq(tasks.areaId, areaId) : undefined,
+        ),
+      ),
+    db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(eq(tasks.done, false), isNull(tasks.dueDate), areaId ? eq(tasks.areaId, areaId) : undefined),
+      ),
+    db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.done, true), areaId ? eq(tasks.areaId, areaId) : undefined)),
+  ]);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = addDaysISO(weekStart, i);
+    const dayRows = inWeek.filter((r) => r.dueDate === date);
+    return {
+      date,
+      open: dayRows.filter((r) => !r.done).length,
+      done: dayRows.filter((r) => r.done).length,
+    };
+  });
+
+  return {
+    days,
+    overdueCount: overdue.length,
+    undatedCount: undated.length,
+    doneTotal: doneAll.length,
+  };
 }

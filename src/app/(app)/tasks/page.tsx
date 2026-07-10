@@ -1,188 +1,222 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { QuickAdd } from "@/components/tasks/quick-add";
-import { TaskGroup } from "@/components/tasks/task-row";
-import { TaskPanel } from "@/components/tasks/task-panel";
+import { AreaFilter } from "@/components/tasks/area-filter";
 import { AreasManager } from "@/components/tasks/areas-manager";
-import { areaDotClass } from "@/lib/areas";
-import { dueLabel, todayISO } from "@/lib/dates";
+import { DayStrip } from "@/components/tasks/day-strip";
+import { QuickAdd } from "@/components/tasks/quick-add";
+import { TaskGroup, TaskRow } from "@/components/tasks/task-row";
+import { TaskPanel } from "@/components/tasks/task-panel";
+import { dayLongLabel, startOfWeekISO, tasksCountLabel, todayISO } from "@/lib/dates";
 import {
   getTask,
   listAreas,
   tasksDone,
-  tasksForToday,
-  tasksLater,
-  tasksUpcoming,
-  viewCounts,
-  type TaskView,
-  type TaskWithMeta,
+  tasksForDay,
+  tasksOverdue,
+  tasksUndated,
+  weekStrip,
 } from "@/lib/queries/tasks";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "المهام" };
 
-const VIEWS: { key: TaskView; label: string }[] = [
-  { key: "today", label: "اليوم" },
-  { key: "upcoming", label: "القادم" },
-  { key: "later", label: "لاحقًا" },
-  { key: "done", label: "المكتملة" },
-];
-
-const FETCHERS: Record<TaskView, (areaId?: string) => Promise<TaskWithMeta[]>> = {
-  today: tasksForToday,
-  upcoming: tasksUpcoming,
-  later: tasksLater,
-  done: tasksDone,
-};
-
-const EMPTY_MESSAGES: Record<TaskView, string> = {
-  today: "لا مهام لليوم — يوم صافٍ.",
-  upcoming: "لا شيء قادم هذا الأسبوع.",
-  later: "لا مهام مؤجلة.",
-  done: "لم تُنجز مهام بعد.",
-};
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; area?: string; task?: string }>;
+  searchParams: Promise<{ d?: string; view?: string; area?: string; task?: string }>;
 }) {
   const params = await searchParams;
-  const view: TaskView = (VIEWS.some((v) => v.key === params.view) ? params.view : "today") as TaskView;
-  const areaId = params.area;
-
-  const [areas, counts, viewTasks] = await Promise.all([
-    listAreas(),
-    viewCounts(areaId),
-    FETCHERS[view](areaId),
-  ]);
-
-  const detail = params.task ? await getTask(params.task) : null;
-
   const today = todayISO();
+  const view: "day" | "undated" | "done" =
+    params.view === "undated" || params.view === "done" ? params.view : "day";
+  const selected = params.d && ISO.test(params.d) ? params.d : today;
+  const areaId = params.area;
+  const weekStart = startOfWeekISO(selected);
 
-  // group for display
-  let groups: { heading?: string; tasks: TaskWithMeta[] }[];
-  if (view === "today") {
-    const overdue = viewTasks.filter((t) => t.dueDate && t.dueDate < today);
-    const dueToday = viewTasks.filter((t) => !t.dueDate || t.dueDate === today);
-    groups = [
-      { heading: overdue.length ? "متأخرة" : undefined, tasks: overdue },
-      { heading: overdue.length && dueToday.length ? "اليوم" : undefined, tasks: dueToday },
-    ];
-  } else if (view === "upcoming") {
-    const byDate = new Map<string, TaskWithMeta[]>();
-    for (const t of viewTasks) {
-      const k = t.dueDate!;
-      byDate.set(k, [...(byDate.get(k) ?? []), t]);
-    }
-    groups = [...byDate.entries()].map(([d, ts]) => ({
-      heading: dueLabel(d, today),
-      tasks: ts,
-    }));
-  } else if (view === "later") {
-    const dated = viewTasks.filter((t) => t.dueDate);
-    const undated = viewTasks.filter((t) => !t.dueDate);
-    groups = [
-      { heading: dated.length && undated.length ? "بتاريخ بعيد" : undefined, tasks: dated },
-      { heading: dated.length && undated.length ? "بدون تاريخ" : undefined, tasks: undated },
-    ];
-  } else {
-    groups = [{ tasks: viewTasks }];
-  }
-
-  const isEmpty = viewTasks.length === 0;
-
-  const linkFor = (v?: TaskView, a?: string | null) => {
-    const p = new URLSearchParams();
-    if (v && v !== "today") p.set("view", v);
-    if (a) p.set("area", a);
-    const q = p.toString();
-    return q ? `/tasks?${q}` : "/tasks";
-  };
+  const [areas, strip, detail] = await Promise.all([
+    listAreas(),
+    weekStrip(weekStart, today, areaId),
+    params.task ? getTask(params.task) : Promise.resolve(null),
+  ]);
 
   return (
     <>
       <PageHeader
         title="المهـــام"
-        description="كل مهامك ومواعيدها في مكان واحد."
-        actions={<AreasManager areas={areas} />}
+        description="أيامك — لا تصنيفات مجرّدة."
+        actions={
+          <div className="flex items-center gap-2">
+            <AreaFilter areas={areas} current={areaId} />
+            <AreasManager areas={areas} />
+          </div>
+        }
       />
 
-      <div className="space-y-6">
-        <QuickAdd areas={areas} defaultDate={view === "today" ? today : undefined} />
+      <div className="space-y-8">
+        <DayStrip
+          strip={strip}
+          weekStart={weekStart}
+          selected={selected}
+          view={view}
+          today={today}
+          areaId={areaId}
+        />
 
-        {/* view tabs */}
-        <nav className="flex items-center gap-1 border-b">
-          {VIEWS.map((v) => (
-            <Link
-              key={v.key}
-              href={linkFor(v.key, areaId)}
-              className={cn(
-                "-mb-px flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm transition-colors",
-                view === v.key
-                  ? "border-foreground font-medium text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {v.label}
-              {counts[v.key] > 0 ? (
-                <span className="text-xs text-muted-foreground" data-numeric>
-                  {counts[v.key]}
-                </span>
-              ) : null}
-            </Link>
-          ))}
-        </nav>
-
-        {/* area filter chips */}
-        {areas.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Link
-              href={linkFor(view, null)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs transition-colors",
-                !areaId
-                  ? "border-foreground/30 bg-secondary"
-                  : "border-transparent text-muted-foreground hover:bg-accent",
-              )}
-            >
-              الكل
-            </Link>
-            {areas.map((a) => (
-              <Link
-                key={a.id}
-                href={linkFor(view, areaId === a.id ? null : a.id)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
-                  areaId === a.id
-                    ? "border-foreground/30 bg-secondary"
-                    : "border-transparent text-muted-foreground hover:bg-accent",
-                )}
-              >
-                <span className={cn("size-2 rounded-full", areaDotClass(a.color))} />
-                {a.name}
-              </Link>
-            ))}
-          </div>
-        ) : null}
-
-        {/* lists */}
-        {isEmpty ? (
-          <p className="rounded-xl border border-dashed px-6 py-14 text-center text-sm text-muted-foreground">
-            {EMPTY_MESSAGES[view]}
-          </p>
+        {view === "day" ? (
+          <DayBoard selected={selected} today={today} areaId={areaId} areas={areas} />
+        ) : view === "undated" ? (
+          <UndatedBoard areaId={areaId} areas={areas} />
         ) : (
-          <div className="space-y-2">
-            {groups.map((g, i) => (
-              <TaskGroup key={g.heading ?? i} heading={g.heading} tasks={g.tasks} />
-            ))}
-          </div>
+          <DoneBoard areaId={areaId} />
         )}
       </div>
 
       {detail ? <TaskPanel task={detail} areas={areas} /> : null}
     </>
+  );
+}
+
+async function DayBoard({
+  selected,
+  today,
+  areaId,
+  areas,
+}: {
+  selected: string;
+  today: string;
+  areaId?: string;
+  areas: Awaited<ReturnType<typeof listAreas>>;
+}) {
+  const [dayTasks, overdue] = await Promise.all([
+    tasksForDay(selected, areaId),
+    selected === today ? tasksOverdue(today, areaId) : Promise.resolve([]),
+  ]);
+
+  const open = dayTasks.filter((t) => !t.done);
+  const doneToday = dayTasks.filter((t) => t.done);
+  const total = dayTasks.length;
+  const labels = dayLongLabel(selected);
+
+  return (
+    <div className="space-y-6">
+      {/* day header + progress */}
+      <div>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 className="text-2xl font-bold">
+            {selected === today ? "اليوم — " : ""}
+            {labels.gregorian}
+            <span className="ms-2 text-sm font-normal text-muted-foreground" data-numeric>
+              {labels.hijri}
+            </span>
+          </h2>
+          {total > 0 ? (
+            <span className="text-xs text-muted-foreground" data-numeric>
+              أنجزت {doneToday.length} من {total}
+            </span>
+          ) : null}
+        </div>
+        {total > 0 ? (
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${Math.round((doneToday.length / total) * 100)}%` }}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <QuickAdd
+        key={selected + (areaId ?? "")}
+        areas={areas}
+        defaultDate={selected}
+        placeholder={
+          selected === today ? "أضف مهمة لليوم… ثم Enter" : `أضف مهمة لـ${labels.gregorian}… ثم Enter`
+        }
+      />
+
+      {overdue.length > 0 ? (
+        <TaskGroup
+          heading={`متأخرة — من أيام سابقة (${overdue.length})`}
+          headingClassName="text-destructive"
+          tasks={overdue}
+        />
+      ) : null}
+
+      {open.length > 0 ? (
+        <TaskGroup heading={overdue.length ? "اليوم" : undefined} tasks={open} showDue={false} />
+      ) : (
+        <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+          {total > 0 ? "أنجزت كل شيء — يوم نظيف ✓" : "لا مهام لهذا اليوم."}
+        </p>
+      )}
+
+      {doneToday.length > 0 ? (
+        <details className="group/done rounded-xl border border-dashed">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3.5 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="size-4 transition-transform group-open/done:rotate-180" />
+            المنجزة
+            {selected === todayISO() ? " اليوم" : ""}
+            <b data-numeric>({doneToday.length})</b>
+          </summary>
+          <div className="space-y-2 px-3 pb-3">
+            {doneToday.map((t) => (
+              <TaskRow key={t.id} task={t} showDue={false} />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+async function UndatedBoard({
+  areaId,
+  areas,
+}: {
+  areaId?: string;
+  areas: Awaited<ReturnType<typeof listAreas>>;
+}) {
+  const items = await tasksUndated(areaId);
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">
+        بدون تاريخ
+        <span className="ms-2 text-sm font-normal text-muted-foreground" data-numeric>
+          {tasksCountLabel(items.length) || "فارغة"}
+        </span>
+      </h2>
+      <QuickAdd key={"undated" + (areaId ?? "")} areas={areas} defaultDate={null} placeholder="أضف مهمة بلا موعد… ثم Enter" />
+      {items.length > 0 ? (
+        <TaskGroup tasks={items} />
+      ) : (
+        <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+          كل مهامك لها مواعيد — ممتاز.
+        </p>
+      )}
+    </div>
+  );
+}
+
+async function DoneBoard({ areaId }: { areaId?: string }) {
+  const items = await tasksDone(areaId);
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">
+        المنجزة
+        <span className="ms-2 text-sm font-normal text-muted-foreground" data-numeric>
+          آخر {items.length}
+        </span>
+      </h2>
+      {items.length > 0 ? (
+        <TaskGroup tasks={items} />
+      ) : (
+        <p className={cn("rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground")}>
+          لم تُنجز مهام بعد.
+        </p>
+      )}
+    </div>
   );
 }

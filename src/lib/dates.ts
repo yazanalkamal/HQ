@@ -87,6 +87,44 @@ export function todayLongLabel(now: Date = new Date()): {
   return { gregorian: gregorianFmt.format(now), hijri: hijriFmt.format(now) };
 }
 
+const gregorianDayFmt = new Intl.DateTimeFormat("ar-u-nu-latn", {
+  timeZone: "UTC",
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+const hijriDayFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura-nu-latn", {
+  timeZone: "UTC",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+const weekdayShortFmt = new Intl.DateTimeFormat("ar", { timeZone: "UTC", weekday: "long" });
+const dayNumFmt2 = new Intl.DateTimeFormat("ar-u-nu-latn", { timeZone: "UTC", day: "numeric" });
+
+/** Long header label for an arbitrary ISO day: gregorian + hijri. */
+export function dayLongLabel(iso: string): { gregorian: string; hijri: string } {
+  const d = new Date(iso + "T00:00:00Z");
+  return { gregorian: gregorianDayFmt.format(d), hijri: hijriDayFmt.format(d) };
+}
+
+export function weekdayName(iso: string): string {
+  return weekdayShortFmt.format(new Date(iso + "T00:00:00Z"));
+}
+
+export function dayNumber(iso: string): string {
+  return dayNumFmt2.format(new Date(iso + "T00:00:00Z"));
+}
+
+/** Arabic count of tasks: مهمة/مهمتان/3 مهام/11 مهمة. */
+export function tasksCountLabel(n: number): string {
+  if (n === 0) return "";
+  if (n === 1) return "مهمة";
+  if (n === 2) return "مهمتان";
+  if (n <= 10) return `${n} مهام`;
+  return `${n} مهمة`;
+}
+
 /** صباح الخير / مساء الخير by Riyadh hour. */
 export function greeting(now: Date = new Date()): string {
   const hour = Number(

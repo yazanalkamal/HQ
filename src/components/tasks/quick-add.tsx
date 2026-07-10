@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { CalendarDays, Flag, Plus, Loader2 } from "lucide-react";
+import { CalendarDays, CalendarOff, Flag, Plus, Loader2 } from "lucide-react";
 import { createTask } from "@/app/(app)/tasks/actions";
 import {
   DropdownMenu,
@@ -18,19 +18,29 @@ import type { Area } from "@/db/schema";
 const PRIORITIES = ["عادية", "مهمة", "عاجلة"] as const;
 
 /**
- * The zero-friction capture bar: type, Enter, done — the input keeps
- * focus so a brain-dump of ten tasks is ten Enters.
+ * Slim capture line. The chips live below but only appear while you're
+ * actually adding (focus or text) — controls don't shout when idle.
+ * `defaultDate` follows the selected day; the date chip accepts ANY date.
  */
-export function QuickAdd({ areas, defaultDate }: { areas: Area[]; defaultDate?: string }) {
+export function QuickAdd({
+  areas,
+  defaultDate,
+  placeholder,
+}: {
+  areas: Area[];
+  defaultDate: string | null;
+  placeholder?: string;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState<string | null>(defaultDate ?? null);
+  const [dueDate, setDueDate] = useState<string | null>(defaultDate);
   const [priority, setPriority] = useState(0);
   const [areaId, setAreaId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const today = todayISO();
+  const tomorrow = addDaysISO(today, 1);
 
   function submit() {
     const t = title.trim();
@@ -43,9 +53,10 @@ export function QuickAdd({ areas, defaultDate }: { areas: Area[]; defaultDate?: 
   }
 
   const selectedArea = areas.find((a) => a.id === areaId) ?? null;
+  const customDate = !!dueDate && dueDate !== today && dueDate !== tomorrow;
 
   return (
-    <div className="rounded-xl border transition-shadow focus-within:shadow-sm">
+    <div className="group/qa relative rounded-xl border transition-shadow focus-within:border-foreground/30 focus-within:shadow-sm">
       <div className="flex items-center gap-3 px-4">
         {pending ? (
           <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
@@ -58,33 +69,39 @@ export function QuickAdd({ areas, defaultDate }: { areas: Area[]; defaultDate?: 
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
+            if (e.key === "Escape") e.currentTarget.blur();
           }}
-          placeholder="أضف مهمة… ثم Enter"
+          placeholder={placeholder ?? "أضف مهمة… ثم Enter"}
           className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
+        {dueDate === null ? null : (
+          <span className="hidden shrink-0 text-xs text-muted-foreground group-focus-within/qa:inline" data-numeric>
+            → {dueLabel(dueDate, today)}
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2">
-        {/* date chips */}
-        <Chip active={dueDate === today} onClick={() => setDueDate(dueDate === today ? null : today)}>
+      {/* chips — a floating panel so opening/closing never shifts the list
+          below (a mid-click layout shift makes clicks land on the wrong row) */}
+      <div
+        className={cn(
+          "absolute inset-x-0 top-[calc(100%+6px)] z-20 flex-wrap items-center gap-1.5 rounded-xl border bg-popover px-3 py-2.5 shadow-md",
+          title ? "flex" : "hidden group-focus-within/qa:flex",
+        )}
+      >
+        <Chip active={dueDate === today} onClick={() => setDueDate(today)}>
           اليوم
         </Chip>
-        <Chip
-          active={dueDate === addDaysISO(today, 1)}
-          onClick={() =>
-            setDueDate(dueDate === addDaysISO(today, 1) ? null : addDaysISO(today, 1))
-          }
-        >
+        <Chip active={dueDate === tomorrow} onClick={() => setDueDate(tomorrow)}>
           غدًا
         </Chip>
-        <Chip
-          active={!!dueDate && dueDate !== today && dueDate !== addDaysISO(today, 1)}
-          onClick={() => dateRef.current?.showPicker()}
-        >
+        <Chip active={customDate} onClick={() => dateRef.current?.showPicker()}>
           <CalendarDays className="size-3" />
-          {dueDate && dueDate !== today && dueDate !== addDaysISO(today, 1)
-            ? dueLabel(dueDate, today)
-            : "تاريخ"}
+          {customDate ? dueLabel(dueDate!, today) : "أي تاريخ"}
+        </Chip>
+        <Chip active={dueDate === null} onClick={() => setDueDate(null)}>
+          <CalendarOff className="size-3" />
+          بدون تاريخ
         </Chip>
         <input
           ref={dateRef}
@@ -97,7 +114,6 @@ export function QuickAdd({ areas, defaultDate }: { areas: Area[]; defaultDate?: 
 
         <span className="mx-1 h-4 w-px bg-border" />
 
-        {/* priority cycle */}
         <Chip
           active={priority > 0}
           className={cn(priority === 2 && "text-destructive")}
@@ -107,7 +123,6 @@ export function QuickAdd({ areas, defaultDate }: { areas: Area[]; defaultDate?: 
           {PRIORITIES[priority]}
         </Chip>
 
-        {/* area */}
         {areas.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
