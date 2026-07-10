@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { AddTaskRow } from "@/components/tasks/add-task-row";
 import { AreaFilter } from "@/components/tasks/area-filter";
 import { AreasManager } from "@/components/tasks/areas-manager";
 import { DayStrip } from "@/components/tasks/day-strip";
@@ -146,11 +147,17 @@ async function DayBoard({
       ) : null}
 
       {open.length > 0 ? (
-        <TaskGroup heading={overdue.length ? "اليوم" : undefined} tasks={open} showDue={false} />
+        <div className="space-y-2">
+          <TaskGroup heading={overdue.length ? "اليوم" : undefined} tasks={open} showDue={false} />
+          <AddTaskRow defaultDate={selected} />
+        </div>
       ) : (
-        <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-          {total > 0 ? "أنجزت كل شيء — يوم نظيف ✓" : "لا مهام لهذا اليوم."}
-        </p>
+        <div className="space-y-2">
+          <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+            {total > 0 ? "أنجزت كل شيء — يوم نظيف ✓" : "لا مهام لهذا اليوم."}
+          </p>
+          <AddTaskRow defaultDate={selected} />
+        </div>
       )}
 
       {doneToday.length > 0 ? (
@@ -190,11 +197,17 @@ async function UndatedBoard({
       </h2>
       <QuickAdd key={"undated" + (areaId ?? "")} areas={areas} defaultDate={null} placeholder="أضف مهمة بلا موعد… ثم Enter" />
       {items.length > 0 ? (
-        <TaskGroup tasks={items} />
+        <div className="space-y-2">
+          <TaskGroup tasks={items} />
+          <AddTaskRow defaultDate={null} />
+        </div>
       ) : (
-        <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-          كل مهامك لها مواعيد — ممتاز.
-        </p>
+        <div className="space-y-2">
+          <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+            كل مهامك لها مواعيد — ممتاز.
+          </p>
+          <AddTaskRow defaultDate={null} />
+        </div>
       )}
     </div>
   );
