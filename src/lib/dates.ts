@@ -53,6 +53,13 @@ export function dueLabel(iso: string, today: string = todayISO()): string {
     : `${weekdayFmt.format(d)} ${shortFmt.format(d)}`;
 }
 
+/** Whole days from `today` to `iso` (0 = today, 1 = غدًا…). */
+export function daysUntil(iso: string, today: string = todayISO()): number {
+  return Math.round(
+    (Date.parse(iso + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86_400_000,
+  );
+}
+
 const gregorianFmt = new Intl.DateTimeFormat("ar-u-nu-latn", {
   timeZone: APP_TZ,
   weekday: "long",

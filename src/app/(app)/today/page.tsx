@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, NotebookText } from "lucide-react";
+import { ArrowLeft, CalendarClock } from "lucide-react";
 import { QuickAdd } from "@/components/tasks/quick-add";
 import { TaskGroup } from "@/components/tasks/task-row";
 import { TaskPanel } from "@/components/tasks/task-panel";
 import { getCurrentSession } from "@/lib/auth";
-import { greeting, todayISO, todayLongLabel } from "@/lib/dates";
-import { formatRelative } from "@/lib/format";
-import { notesForTask, listNotes } from "@/lib/queries/notes";
+import { formatSAR } from "@/lib/currency";
+import { daysUntil, dueLabel, greeting, todayISO, todayLongLabel } from "@/lib/dates";
+import { upcomingRenewals } from "@/lib/queries/finance";
 import {
   completedTodayCount,
   getTask,
@@ -15,6 +15,7 @@ import {
   tasksForToday,
   tasksUpcoming,
 } from "@/lib/queries/tasks";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "اليوم" };
 
@@ -26,16 +27,15 @@ export default async function TodayPage({
   const { user } = await getCurrentSession();
   const params = await searchParams;
 
-  const [todayTasks, upcoming, areas, doneCount, recentNotes] = await Promise.all([
+  const [todayTasks, upcoming, areas, doneCount, renewals] = await Promise.all([
     tasksForToday(),
     tasksUpcoming(),
     listAreas(),
     completedTodayCount(),
-    listNotes().then((n) => n.slice(0, 4)),
+    upcomingRenewals(7),
   ]);
 
   const detail = params.task ? await getTask(params.task) : null;
-  const linkedNotes = detail ? await notesForTask(detail.id) : [];
 
   const today = todayISO();
   const overdue = todayTasks.filter((t) => t.dueDate && t.dueDate < today);
@@ -101,31 +101,45 @@ export default async function TodayPage({
           </section>
         ) : null}
 
-        {/* recent notes */}
-        {recentNotes.length > 0 ? (
+        {/* renewals within a week */}
+        {renewals.length > 0 ? (
           <section className="space-y-3">
-            <h2 className="text-sm font-bold">آخر الملاحظات</h2>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {recentNotes.map((n) => (
-                <li key={n.id}>
-                  <Link
-                    href={`/notes/${n.id}`}
-                    className="flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm transition-colors hover:bg-accent"
-                  >
-                    <NotebookText className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{n.title}</span>
-                    <time className="ms-auto shrink-0 text-xs text-muted-foreground" data-numeric>
-                      {formatRelative(n.updatedAt)}
-                    </time>
-                  </Link>
-                </li>
-              ))}
+            <h2 className="text-sm font-bold">تجديدات قريبة</h2>
+            <ul className="divide-y rounded-xl border">
+              {renewals.map((r) => {
+                const days = daysUntil(r.effectiveRenewal, today);
+                return (
+                  <li key={r.id} className="flex items-center gap-3 px-5 py-3">
+                    <CalendarClock
+                      className={cn(
+                        "size-4 shrink-0",
+                        days <= 1 ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    />
+                    <Link href="/finance" className="min-w-0 flex-1 truncate text-sm hover:underline">
+                      {r.name}
+                    </Link>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        days <= 1 ? "font-medium text-destructive" : "text-muted-foreground",
+                      )}
+                      data-numeric
+                    >
+                      {dueLabel(r.effectiveRenewal, today)}
+                    </span>
+                    <span className="text-sm font-medium" data-numeric>
+                      {formatSAR(r.amount)}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}
       </div>
 
-      {detail ? <TaskPanel task={detail} areas={areas} linkedNotes={linkedNotes} /> : null}
+      {detail ? <TaskPanel task={detail} areas={areas} /> : null}
     </>
   );
 }

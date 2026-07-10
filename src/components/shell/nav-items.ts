@@ -1,7 +1,6 @@
 import {
   Sun,
   ListTodo,
-  NotebookText,
   Wallet,
   Compass,
   ShieldCheck,
@@ -17,7 +16,6 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/today", label: "اليوم", icon: Sun },
   { href: "/tasks", label: "المهام", icon: ListTodo },
-  { href: "/notes", label: "الملاحظات", icon: NotebookText },
   { href: "/finance", label: "المالية", icon: Wallet },
   { href: "/plans", label: "الخطط", icon: Compass },
 ];

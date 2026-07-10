@@ -10,6 +10,7 @@ import {
   boolean,
   smallint,
   doublePrecision,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -112,25 +113,43 @@ export const subtasks = pgTable(
   (t) => [index("subtasks_task_idx").on(t.taskId)],
 );
 
-// ── الملاحظات / notes ─────────────────────────────────────────────────────────
+// ── المالية / finance ─────────────────────────────────────────────────────────
 
-export const notes = pgTable(
-  "notes",
+/** Recurring subscriptions, SAR. `cycle`: "monthly" | "yearly". */
+export const subscriptions = pgTable(
+  "subscriptions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    title: text("title").notNull(),
-    content: text("content").notNull().default(""), // Markdown source
-    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
-    pinned: boolean("pinned").notNull().default(false),
+    name: text("name").notNull(),
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+    cycle: text("cycle").notNull().default("monthly"),
+    nextRenewal: date("next_renewal").notNull(),
+    category: text("category").notNull().default(""),
+    active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("notes_updated_idx").on(t.updatedAt), index("notes_task_idx").on(t.taskId)],
+  (t) => [index("subs_renewal_idx").on(t.active, t.nextRenewal)],
 );
+
+/** Fixed monthly commitments (rent, family, …), SAR/month. */
+export const commitments = pgTable("commitments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Singleton row (id = 1): the knobs the budget math needs. */
+export const financeSettings = pgTable("finance_settings", {
+  id: smallint("id").primaryKey().default(1),
+  monthlyIncome: numeric("monthly_income", { precision: 12, scale: 2 }).notNull().default("0"),
+});
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Area = typeof areas.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type Subtask = typeof subtasks.$inferSelect;
-export type Note = typeof notes.$inferSelect;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type Commitment = typeof commitments.$inferSelect;

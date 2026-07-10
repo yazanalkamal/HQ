@@ -3,29 +3,21 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import {
-  CalendarPlus,
-  ListTodo,
-  NotebookText,
-  Plus,
-  Search,
-} from "lucide-react";
+import { CalendarPlus, ListTodo, Search } from "lucide-react";
 import { createTask } from "@/app/(app)/tasks/actions";
-import { createNote } from "@/app/(app)/notes/actions";
 import { NAV_ITEMS, ADMIN_ITEM } from "./nav-items";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type SearchResults = {
   tasks: { id: string; title: string; done: boolean; dueDate: string | null }[];
-  notes: { id: string; title: string }[];
 };
 
 export function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResults>({ tasks: [], notes: [] });
+  const [results, setResults] = useState<SearchResults>({ tasks: [] });
   const [, startTransition] = useTransition();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -51,7 +43,7 @@ export function CommandPalette() {
     if (!open) return;
     const q = query.trim();
     if (!q) {
-      const t = setTimeout(() => setResults({ tasks: [], notes: [] }), 0);
+      const t = setTimeout(() => setResults({ tasks: [] }), 0);
       return () => clearTimeout(t);
     }
     const t = setTimeout(async () => {
@@ -121,17 +113,6 @@ export function CommandPalette() {
               </Group>
             ) : null}
 
-            {results.notes.length > 0 ? (
-              <Group heading="الملاحظات">
-                {results.notes.map((n) => (
-                  <Item key={n.id} onSelect={() => go(() => router.push(`/notes/${n.id}`))}>
-                    <NotebookText className="size-4 text-muted-foreground" />
-                    <span className="truncate">{n.title}</span>
-                  </Item>
-                ))}
-              </Group>
-            ) : null}
-
             <Group heading="إنشاء">
               <Item
                 onSelect={() =>
@@ -146,21 +127,6 @@ export function CommandPalette() {
                 <CalendarPlus className="size-4 text-muted-foreground" />
                 <span className="truncate">
                   مهمة اليوم: <b>{q}</b>
-                </span>
-              </Item>
-              <Item
-                onSelect={() =>
-                  go(() =>
-                    startTransition(async () => {
-                      const note = await createNote({ title: q });
-                      router.push(`/notes/${note.id}`);
-                    }),
-                  )
-                }
-              >
-                <Plus className="size-4 text-muted-foreground" />
-                <span className="truncate">
-                  ملاحظة جديدة: <b>{q}</b>
                 </span>
               </Item>
             </Group>

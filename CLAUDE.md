@@ -3,9 +3,10 @@
 # CLAUDE.md — HQ (المقر)
 
 Personal life-HQ web app for exactly ONE user (Yazan). Arabic UI, RTL, at
-**https://hq.al-kamal.net**. Sections: المهام (tasks), الملاحظات (markdown
-notes), المالية (subscriptions + budget + "can I afford it", SAR), الخطط
-(now/next/later boards), الإدارة (sessions, audit log).
+**https://hq.al-kamal.net**. Sections: اليوم (daily dashboard, home), المهام
+(tasks), المالية (subscriptions + budget + "can I afford it", SAR), الخطط
+(now/next/later boards), الإدارة (sessions, audit log). A notes section
+existed and was REMOVED by explicit decision (2026-07-02) — don't re-add it.
 
 **Roles here: Senior UI/UX Designer + Senior Software Engineer. UX is the top
 priority** — quick-add flows, keyboard-first, zero clutter.
@@ -42,7 +43,8 @@ components as props — the client module must import them itself.
   - **الأحرف المرسلة** (`.tarsil` = font-feature-settings "salt"): flowing
     final-letter tails. Single display words only (wordmark, PageHeader
     titles) — never two adjacent words, never running text.
-  - **Serif Text** is for long-form reading (notes view); no kashida there.
+  - **Serif Text** is for long-form reading; currently loaded but unused
+    (its home was the removed notes view) — use it if long-form ever returns.
   - **Riyal**: the font ships the NEW official symbol on U+FDFC — use
     `formatSAR()`/`RIYAL` from `src/lib/currency.ts` in text; the SVG
     `<RiyalSymbol />` only where Thmanyah isn't guaranteed.

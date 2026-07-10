@@ -7,7 +7,6 @@ import { TaskPanel } from "@/components/tasks/task-panel";
 import { AreasManager } from "@/components/tasks/areas-manager";
 import { areaDotClass } from "@/lib/areas";
 import { dueLabel, todayISO } from "@/lib/dates";
-import { notesForTask } from "@/lib/queries/notes";
 import {
   getTask,
   listAreas,
@@ -60,7 +59,6 @@ export default async function TasksPage({
   ]);
 
   const detail = params.task ? await getTask(params.task) : null;
-  const linkedNotes = detail ? await notesForTask(detail.id) : [];
 
   const today = todayISO();
 
@@ -184,7 +182,7 @@ export default async function TasksPage({
         )}
       </div>
 
-      {detail ? <TaskPanel task={detail} areas={areas} linkedNotes={linkedNotes} /> : null}
+      {detail ? <TaskPanel task={detail} areas={areas} /> : null}
     </>
   );
 }

@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { CalendarDays, Check, Flag, NotebookText, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, Flag, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import {
   addSubtask,
   deleteSubtask,
@@ -12,7 +11,6 @@ import {
   toggleTask,
   updateTask,
 } from "@/app/(app)/tasks/actions";
-import { createNote } from "@/app/(app)/notes/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,17 +31,8 @@ import type { TaskWithMeta } from "@/lib/queries/tasks";
 const PRIORITIES = ["عادية", "مهمة", "عاجلة"] as const;
 
 type TaskDetail = TaskWithMeta & { subtasks: Subtask[] };
-type LinkedNote = { id: string; title: string };
 
-export function TaskPanel({
-  task,
-  areas,
-  linkedNotes,
-}: {
-  task: TaskDetail;
-  areas: Area[];
-  linkedNotes: LinkedNote[];
-}) {
+export function TaskPanel({ task, areas }: { task: TaskDetail; areas: Area[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -242,35 +231,6 @@ export function TaskPanel({
                 className="h-8 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
-          </section>
-
-          {/* linked notes */}
-          <section className="space-y-2">
-            <h3 className="text-xs text-muted-foreground">الملاحظات المرتبطة</h3>
-            {linkedNotes.map((n) => (
-              <Link
-                key={n.id}
-                href={`/notes/${n.id}`}
-                className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-accent"
-              >
-                <NotebookText className="size-3.5 text-muted-foreground" />
-                {n.title}
-              </Link>
-            ))}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5"
-              onClick={() =>
-                startTransition(async () => {
-                  const note = await createNote({ title: task.title, taskId: task.id });
-                  router.push(`/notes/${note.id}`);
-                })
-              }
-            >
-              <Plus className="size-3.5" />
-              ملاحظة جديدة
-            </Button>
           </section>
 
           {/* footer actions */}

@@ -15,6 +15,20 @@
       "when": 1783021868698,
       "tag": "0001_tasks-notes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783679739104,
+      "tag": "0002_drop-notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783679774702,
+      "tag": "0003_finance",
+      "breakpoints": true
     }
   ]
 }
