@@ -146,6 +146,23 @@ export const financeSettings = pgTable("finance_settings", {
   monthlyIncome: numeric("monthly_income", { precision: 12, scale: 2 }).notNull().default("0"),
 });
 
+// ── الخطط / plans ─────────────────────────────────────────────────────────────
+
+/** Now/next/someday board. `bucket`: "now" | "next" | "someday". */
+export const plans = pgTable(
+  "plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    bucket: text("bucket").notNull().default("someday"),
+    sortOrder: doublePrecision("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("plans_bucket_idx").on(t.bucket, t.sortOrder)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Area = typeof areas.$inferSelect;
@@ -153,3 +170,4 @@ export type Task = typeof tasks.$inferSelect;
 export type Subtask = typeof subtasks.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type Commitment = typeof commitments.$inferSelect;
+export type Plan = typeof plans.$inferSelect;
