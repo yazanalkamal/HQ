@@ -74,17 +74,44 @@ const planSchema = z
     nextStep: z.string().trim().max(500).default(""),
     cadence: z.number().int().min(1).max(7).default(3),
     fromIdeaId: z.string().uuid().nullish(),
+    parentId: z.string().uuid().nullish(),
   })
   .refine((p) => p.endDate >= p.startDate, { message: "النهاية قبل البداية" });
 
 export async function createPlan(input: z.input<typeof planSchema>): Promise<string> {
   await requireUser();
-  const { fromIdeaId, ...data } = planSchema.parse(input);
-  const [plan] = await db.insert(plans).values(data).returning();
+  const { fromIdeaId, parentId, ...data } = planSchema.parse(input);
+  if (parentId) {
+    const parent = await db.select().from(plans).where(eq(plans.id, parentId));
+    if (!parent[0]) throw new Error("الخطة الأم غير موجودة");
+    if (parent[0].parentId) throw new Error("مستوى واحد فقط من الخطط الفرعية");
+  }
+  const [plan] = await db
+    .insert(plans)
+    .values({ ...data, parentId: parentId ?? null })
+    .returning();
   if (fromIdeaId) await db.delete(ideas).where(eq(ideas.id, fromIdeaId));
-  await auditAs("plan.create", plan.id, { title: plan.title, kind: plan.kind });
+  await auditAs("plan.create", plan.id, { title: plan.title, kind: plan.kind, parentId });
   revalidate();
   return plan.id;
+}
+
+/** Quick-add a task that belongs to a plan (lands undated in المهام too). */
+export async function addTaskToPlan(planId: string, title: string, dueDate?: string) {
+  await requireUser();
+  const data = z
+    .object({
+      planId: z.string().uuid(),
+      title: z.string().trim().min(1).max(500),
+      dueDate: isoDate.optional(),
+    })
+    .parse({ planId, title, dueDate });
+  const [task] = await db
+    .insert(tasks)
+    .values({ title: data.title, planId: data.planId, dueDate: data.dueDate ?? null })
+    .returning();
+  await auditAs("plan.task_add", planId, { taskId: task.id, title: task.title });
+  revalidate();
 }
 
 const planUpdateSchema = z.object({

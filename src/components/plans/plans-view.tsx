@@ -67,7 +67,15 @@ export function PlansView({
         )}
       </div>
 
-      {resolvedSheet ? <PlanSheet state={resolvedSheet} onClose={() => setSheet(null)} /> : null}
+      {resolvedSheet ? (
+        <PlanSheet
+          key={resolvedSheet.mode === "edit" ? resolvedSheet.plan.id : "create"}
+          state={resolvedSheet}
+          onClose={() => setSheet(null)}
+          onCreateSub={(parent) => setSheet({ mode: "create", parent })}
+          onOpenPlan={(planId) => setSheet({ mode: "edit", planId })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -169,8 +177,8 @@ function Canvas({
   return (
     <div className="overflow-x-auto">
       <div
-        className="relative grid min-w-[860px]"
-        style={{ gridTemplateColumns: `215px repeat(${WEEKS}, minmax(48px, 1fr))` }}
+        className="relative grid min-w-[1040px]"
+        style={{ gridTemplateColumns: `250px repeat(${WEEKS}, minmax(58px, 1fr))` }}
       >
         {/* current-week highlight */}
         <div
@@ -186,7 +194,7 @@ function Canvas({
         {months.map((m) => (
           <span
             key={m.label + m.from}
-            className="pt-4 text-xs font-bold text-muted-foreground"
+            className="pt-4 text-sm font-bold text-muted-foreground"
             style={{ gridColumn: `${m.from + 2} / span ${m.span}`, gridRow: 2 }}
           >
             {m.label}
@@ -197,7 +205,7 @@ function Canvas({
         {win.weekStarts.map((w, i) => (
           <span
             key={w}
-            className="border-b pb-2 pt-1 text-[10.5px] text-muted-foreground"
+            className="border-b pb-2.5 pt-1.5 text-xs text-muted-foreground"
             style={{ gridColumn: i + 2, gridRow: 3 }}
             data-numeric
           >
@@ -213,14 +221,18 @@ function Canvas({
             <div key={p.id} className="contents">
               {/* label */}
               <div
-                className="border-b py-4 pe-4"
+                className={cn("border-b py-4 pe-4", p.depth === 1 && "ps-6 py-3")}
                 style={{ gridColumn: 1, gridRow: row }}
               >
                 <button
                   type="button"
                   onClick={() => onOpen(p)}
-                  className="text-start text-sm font-bold hover:underline"
+                  className={cn(
+                    "text-start hover:underline",
+                    p.depth === 1 ? "text-sm font-medium text-muted-foreground" : "text-[15px] font-bold",
+                  )}
                 >
+                  {p.depth === 1 ? <span className="me-1.5 text-muted-foreground">↳</span> : null}
                   {p.title}
                 </button>
                 {p.kind === "project" ? (
@@ -275,7 +287,7 @@ function ProjectBar({
       <button
         type="button"
         onClick={onOpen}
-        className="relative h-[30px] w-full cursor-pointer"
+        className={cn("relative w-full cursor-pointer", plan.depth === 1 ? "h-[22px]" : "h-10")}
         style={{ ["--c" as string]: hex }}
         title={plan.title}
       >
@@ -297,7 +309,8 @@ function ProjectBar({
               key={m.id}
               title={`${m.title} — ${dueLabel(m.dueDate, today)}${late ? " (متأخر!)" : m.done ? " ✓" : ""}`}
               className={cn(
-                "absolute top-1/2 size-[11px] -translate-y-1/2 rotate-45 rounded-[2px] border-2",
+                "absolute top-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border-2",
+                plan.depth === 1 ? "size-[9px]" : "size-[13px]",
                 late
                   ? "border-destructive bg-destructive"
                   : m.done
@@ -350,7 +363,7 @@ function RoutineRibbon({
                 : `${fill}/${plan.cadence} هذا الأسبوع${missed ? " — انقطاع!" : ""}`
             }
             className={cn(
-              "relative h-[30px] overflow-hidden rounded-md",
+              "relative h-10 overflow-hidden rounded-md",
               isFuture ? "bg-secondary/50 [background-image:repeating-linear-gradient(-45deg,transparent_0_5px,white_5px_10px)]" : "bg-secondary",
               missed && "outline-dashed outline-[1.5px] -outline-offset-[1.5px] outline-destructive/50",
             )}

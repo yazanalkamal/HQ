@@ -50,10 +50,12 @@ components as props — the client module must import them itself.
     `<RiyalSymbol />` only where Thmanyah isn't guaranteed.
   `PageHeader` (`src/components/page-header.tsx`) is the one place Serif
   Display appears.
-- **Layout:** content sits in a centered `max-w-4xl` column with generous
-  padding (`px-6 py-10 md:px-12 md:py-16`) — the "margin from the walls" is a
-  hard requirement. Sidebar is fixed on the START (right) side; always use
-  logical properties (`ms-`, `start-`, `border-e`) — never left/right.
+- **Layout:** content is CENTERED (`mx-auto`) in the space beside the sidebar,
+  `max-w-6xl` with generous padding (`px-6 py-12 md:px-14 md:py-20`) — margin
+  from the walls is a hard requirement, and Yazan explicitly asked for
+  centered + wide (not anchored to the sidebar, not narrow). Sidebar is fixed
+  on the START (right) side; always use logical properties (`ms-`, `start-`,
+  `border-e`) — never left/right.
 - **Numbers:** Arabic UI with **Latin digits** — format via `src/lib/format.ts`
   (`ar-u-nu-latn`); tag numeric spans with `data-numeric` (tabular figures).
   Currency is SAR with the official Riyal symbol (U+20C1; verify glyph support

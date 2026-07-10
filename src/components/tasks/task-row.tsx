@@ -7,6 +7,7 @@ import { toggleTask } from "@/app/(app)/tasks/actions";
 import { TaskCheck } from "@/components/ui/task-check";
 import { areaDotClass } from "@/lib/areas";
 import { dueLabel, todayISO } from "@/lib/dates";
+import { planHex } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 import type { TaskWithMeta } from "@/lib/queries/tasks";
 
@@ -61,7 +62,7 @@ export function TaskRow({ task }: { task: TaskWithMeta }) {
           {task.title}
         </p>
 
-        {(task.dueDate || task.area || task.priority > 0 || task.subtaskCount > 0) && (
+        {(task.dueDate || task.area || task.plan || task.priority > 0 || task.subtaskCount > 0) && (
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {task.dueDate ? (
               <span
@@ -94,6 +95,15 @@ export function TaskRow({ task }: { task: TaskWithMeta }) {
               <span className="flex items-center gap-1.5">
                 <span className={cn("size-2 rounded-full", areaDotClass(task.area.color))} />
                 {task.area.name}
+              </span>
+            ) : null}
+            {task.plan ? (
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block size-2 rotate-45 rounded-[1.5px]"
+                  style={{ background: planHex(task.plan.color) }}
+                />
+                {task.plan.title}
               </span>
             ) : null}
           </div>

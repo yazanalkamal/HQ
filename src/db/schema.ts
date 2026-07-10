@@ -12,6 +12,7 @@ import {
   doublePrecision,
   numeric,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -87,6 +88,9 @@ export const tasks = pgTable(
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     areaId: uuid("area_id").references(() => areas.id, { onDelete: "set null" }),
+    planId: uuid("plan_id").references((): AnyPgColumn => plans.id, {
+      onDelete: "set null",
+    }),
     dueDate: date("due_date"), // date-only; time lives in dueTime when set
     dueTime: text("due_time"), // "HH:mm" or null
     priority: smallint("priority").notNull().default(0),
@@ -161,6 +165,10 @@ export const plans = pgTable(
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     kind: text("kind").notNull().default("project"),
+    /** one level of nesting: a sub-plan's parent is always a root plan */
+    parentId: uuid("parent_id").references((): AnyPgColumn => plans.id, {
+      onDelete: "cascade",
+    }),
     startDate: date("start_date").notNull(),
     endDate: date("end_date").notNull(),
     color: text("color").notNull().default("violet"), // PLAN_COLORS key

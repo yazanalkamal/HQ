@@ -1,18 +1,25 @@
 import "server-only";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
-import { areas, subtasks, tasks, type Area, type Subtask, type Task } from "@/db/schema";
+import { areas, plans, subtasks, tasks, type Area, type Subtask, type Task } from "@/db/schema";
 import { addDaysISO, todayISO } from "@/lib/dates";
 
 export type TaskWithMeta = Task & {
   area: Area | null;
+  plan: { id: string; title: string; color: string } | null;
   subtaskCount: number;
   subtaskDone: number;
 };
 
 export type TaskView = "today" | "upcoming" | "later" | "done";
 
-async function withMeta(rows: { task: Task; area: Area | null }[]): Promise<TaskWithMeta[]> {
+type JoinedRow = {
+  task: Task;
+  area: Area | null;
+  plan: { id: string; title: string; color: string } | null;
+};
+
+async function withMeta(rows: JoinedRow[]): Promise<TaskWithMeta[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.task.id);
   const subs = await db
@@ -26,9 +33,10 @@ async function withMeta(rows: { task: Task; area: Area | null }[]): Promise<Task
     if (s.done) e.done++;
     byTask.set(s.taskId, e);
   }
-  return rows.map(({ task, area }) => ({
+  return rows.map(({ task, area, plan }) => ({
     ...task,
     area,
+    plan: plan?.id ? plan : null,
     subtaskCount: byTask.get(task.id)?.count ?? 0,
     subtaskDone: byTask.get(task.id)?.done ?? 0,
   }));
@@ -36,9 +44,14 @@ async function withMeta(rows: { task: Task; area: Area | null }[]): Promise<Task
 
 const baseSelect = () =>
   db
-    .select({ task: tasks, area: areas })
+    .select({
+      task: tasks,
+      area: areas,
+      plan: { id: plans.id, title: plans.title, color: plans.color },
+    })
     .from(tasks)
-    .leftJoin(areas, eq(tasks.areaId, areas.id));
+    .leftJoin(areas, eq(tasks.areaId, areas.id))
+    .leftJoin(plans, eq(tasks.planId, plans.id));
 
 const openOrder = [
   desc(tasks.priority),

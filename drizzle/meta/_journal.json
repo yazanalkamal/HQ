@@ -50,6 +50,13 @@
       "when": 1783683106851,
       "tag": "0006_plans-canvas",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783684080258,
+      "tag": "0007_plan-depth",
+      "breakpoints": true
     }
   ]
 }

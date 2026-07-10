@@ -46,9 +46,9 @@ export default async function AppLayout({
         </div>
       </header>
 
-      {/* content — anchored near the sidebar (start side), generous frame */}
+      {/* content — centered in the space beside the sidebar, wide and airy */}
       <main className="md:ms-72">
-        <div className="w-full max-w-4xl px-6 py-12 md:px-20 md:py-24">
+        <div className="mx-auto w-full max-w-6xl px-6 py-12 md:px-14 md:py-20">
           {children}
         </div>
       </main>

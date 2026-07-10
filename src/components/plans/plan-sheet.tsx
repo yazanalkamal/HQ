@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, Plus, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, GitBranch, ListTodo, Plus, Trash2, X } from "lucide-react";
 import {
   addMilestone,
+  addTaskToPlan,
   createPlan,
   deleteMilestone,
   deletePlan,
   toggleMilestone,
   updatePlan,
 } from "@/app/(app)/plans/actions";
+import { toggleTask } from "@/app/(app)/tasks/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,23 +25,36 @@ import { cn } from "@/lib/utils";
 import type { Idea } from "@/db/schema";
 import type { PlanWithDetail } from "@/lib/queries/plans";
 
+export type ParentRef = {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  color: string;
+};
+
 export type SheetRequest =
-  | { mode: "create"; fromIdea?: Idea }
+  | { mode: "create"; fromIdea?: Idea; parent?: ParentRef }
   | { mode: "edit"; planId: string }
   | null;
 
 export type SheetState =
-  | { mode: "create"; fromIdea?: Idea }
+  | { mode: "create"; fromIdea?: Idea; parent?: ParentRef }
   | { mode: "edit"; plan: PlanWithDetail };
 
 export function PlanSheet({
   state,
   onClose,
+  onCreateSub,
+  onOpenPlan,
 }: {
   state: SheetState;
   onClose: () => void;
+  onCreateSub: (parent: ParentRef) => void;
+  onOpenPlan: (planId: string) => void;
 }) {
   const editing = state.mode === "edit" ? state.plan : null;
+  const parent = state.mode === "create" ? state.parent : null;
   const [, startTransition] = useTransition();
   const today = todayISO();
 
@@ -48,9 +64,15 @@ export function PlanSheet({
   const [kind, setKind] = useState<"project" | "routine">(
     (editing?.kind as "project" | "routine") ?? "project",
   );
-  const [startDate, setStartDate] = useState(editing?.startDate ?? today);
-  const [endDate, setEndDate] = useState(editing?.endDate ?? addMonthsISO(today, 2));
-  const [color, setColor] = useState<PlanColor>((editing?.color as PlanColor) ?? "violet");
+  const [startDate, setStartDate] = useState(
+    editing?.startDate ?? (parent ? (parent.startDate >= today ? parent.startDate : today) : today),
+  );
+  const [endDate, setEndDate] = useState(
+    editing?.endDate ?? parent?.endDate ?? addMonthsISO(today, 2),
+  );
+  const [color, setColor] = useState<PlanColor>(
+    (editing?.color as PlanColor) ?? ((parent?.color as PlanColor) ?? "violet"),
+  );
   const [nextStep, setNextStep] = useState(editing?.nextStep ?? "");
   const [cadence, setCadence] = useState(editing?.cadence ?? 3);
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -81,6 +103,7 @@ export function PlanSheet({
           await createPlan({
             ...data,
             fromIdeaId: state.mode === "create" ? state.fromIdea?.id : undefined,
+            parentId: parent?.id,
           });
         onClose();
       } catch {
@@ -91,7 +114,18 @@ export function PlanSheet({
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent title={editing ? "تفاصيل الخطة" : "خطة جديدة"}>
+      <SheetContent
+        title={
+          editing
+            ? editing.parentId
+              ? "خطة فرعية"
+              : "تفاصيل الخطة"
+            : parent
+              ? `خطة فرعية تحت «${parent.title}»`
+              : "خطة جديدة"
+        }
+        className="max-w-xl"
+      >
         <div className="space-y-5">
           <label className="block space-y-1.5">
             <span className="text-xs text-muted-foreground">العنوان</span>
@@ -212,8 +246,46 @@ export function PlanSheet({
           ) : null}
           {!editing && kind === "project" ? (
             <p className="rounded-lg bg-secondary px-3.5 py-2.5 text-xs text-muted-foreground">
-              بعد الإنشاء افتح الخطة لإضافة المعالم (◆) على تواريخ حقيقية.
+              بعد الإنشاء افتح الخطة لإضافة المعالم (◆) والمهام والخطط الفرعية.
             </p>
+          ) : null}
+
+          {/* plan tasks */}
+          {editing ? <PlanTasks plan={editing} /> : null}
+
+          {/* sub-plans — root plans only */}
+          {editing && !editing.parentId ? (
+            <section className="space-y-2">
+              <h3 className="text-xs text-muted-foreground">الخطط الفرعية</h3>
+              {editing.children.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onOpenPlan(c.id)}
+                  className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-start text-sm hover:bg-accent"
+                >
+                  <GitBranch className="size-3.5 text-muted-foreground" />
+                  {c.title}
+                </button>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={() =>
+                  onCreateSub({
+                    id: editing.id,
+                    title: editing.title,
+                    startDate: editing.startDate,
+                    endDate: editing.endDate,
+                    color: editing.color,
+                  })
+                }
+              >
+                <Plus className="size-3.5" />
+                خطة فرعية
+              </Button>
+            </section>
           ) : null}
 
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
@@ -263,6 +335,80 @@ export function PlanSheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function PlanTasks({ plan }: { plan: PlanWithDetail }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [title, setTitle] = useState("");
+  const today = todayISO();
+
+  function add() {
+    const t = title.trim();
+    if (!t) return;
+    startTransition(async () => {
+      await addTaskToPlan(plan.id, t);
+      setTitle("");
+    });
+  }
+
+  return (
+    <section className="space-y-2">
+      <h3 className="text-xs text-muted-foreground">
+        مهام الخطة
+        {plan.tasks.length > 0 ? (
+          <span data-numeric>
+            {" "}
+            ({plan.tasks.filter((t) => t.done).length}/{plan.tasks.length})
+          </span>
+        ) : null}
+      </h3>
+
+      <div className="space-y-1">
+        {plan.tasks.map((t) => (
+          <div key={t.id} className="group flex items-center gap-2.5 rounded-md px-1 py-1">
+            <TaskCheck
+              done={t.done}
+              onToggle={() => startTransition(() => toggleTask(t.id, !t.done))}
+              className="size-4"
+            />
+            <button
+              type="button"
+              onClick={() => router.push(`/tasks?task=${t.id}`)}
+              className={cn(
+                "min-w-0 flex-1 truncate text-start text-sm hover:underline",
+                t.done && "text-muted-foreground line-through",
+              )}
+            >
+              {t.title}
+            </button>
+            {t.dueDate ? (
+              <span
+                className={cn(
+                  "shrink-0 text-xs",
+                  !t.done && t.dueDate < today ? "text-destructive" : "text-muted-foreground",
+                )}
+                data-numeric
+              >
+                {dueLabel(t.dueDate, today)}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 px-1">
+        <ListTodo className="size-3.5 shrink-0 text-muted-foreground" />
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="أضف مهمة لهذه الخطة… (تظهر في المهام أيضًا)"
+          className="h-8 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+      </div>
+    </section>
   );
 }
 
