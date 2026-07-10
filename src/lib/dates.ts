@@ -53,6 +53,12 @@ export function dueLabel(iso: string, today: string = todayISO()): string {
     : `${weekdayFmt.format(d)} ${shortFmt.format(d)}`;
 }
 
+/** Start of the week containing `iso` — weeks start Sunday (KSA). */
+export function startOfWeekISO(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z");
+  return addDaysISO(iso, -d.getUTCDay()); // getUTCDay: 0 = Sunday
+}
+
 /** Whole days from `today` to `iso` (0 = today, 1 = غدًا…). */
 export function daysUntil(iso: string, today: string = todayISO()): number {
   return Math.round(

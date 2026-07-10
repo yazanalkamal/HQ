@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import { CalendarPlus, ListTodo, Search } from "lucide-react";
+import { CalendarPlus, Lightbulb, ListTodo, Search } from "lucide-react";
 import { createTask } from "@/app/(app)/tasks/actions";
+import { createIdea } from "@/app/(app)/plans/actions";
 import { NAV_ITEMS, ADMIN_ITEM } from "./nav-items";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -114,6 +115,21 @@ export function CommandPalette() {
             ) : null}
 
             <Group heading="إنشاء">
+              <Item
+                onSelect={() =>
+                  go(() =>
+                    startTransition(async () => {
+                      await createIdea(q);
+                      router.push("/plans");
+                    }),
+                  )
+                }
+              >
+                <Lightbulb className="size-4 text-muted-foreground" />
+                <span className="truncate">
+                  فكرة: <b>{q}</b>
+                </span>
+              </Item>
               <Item
                 onSelect={() =>
                   go(() =>

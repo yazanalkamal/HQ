@@ -11,6 +11,7 @@ import {
   smallint,
   doublePrecision,
   numeric,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -146,22 +147,69 @@ export const financeSettings = pgTable("finance_settings", {
   monthlyIncome: numeric("monthly_income", { precision: 12, scale: 2 }).notNull().default("0"),
 });
 
-// ── الخطط / plans ─────────────────────────────────────────────────────────────
+// ── الخطط / plans — the time canvas ──────────────────────────────────────────
 
-/** Now/next/someday board. `bucket`: "now" | "next" | "someday". */
+/**
+ * A plan is a bar on the time canvas. `kind`:
+ *  - "project": milestones drive progress
+ *  - "routine": `cadence` times/week, routine_checks drive the ribbon
+ */
 export const plans = pgTable(
   "plans",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
-    bucket: text("bucket").notNull().default("someday"),
-    sortOrder: doublePrecision("sort_order").notNull().default(0),
+    kind: text("kind").notNull().default("project"),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date").notNull(),
+    color: text("color").notNull().default("violet"), // PLAN_COLORS key
+    nextStep: text("next_step").notNull().default(""),
+    cadence: smallint("cadence").notNull().default(3), // routine: times/week
+    status: text("status").notNull().default("active"), // active | done | archived
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("plans_bucket_idx").on(t.bucket, t.sortOrder)],
+  (t) => [index("plans_status_idx").on(t.status, t.startDate)],
 );
+
+/** Diamonds on a project bar — real dates, real accountability. */
+export const milestones = pgTable(
+  "milestones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    dueDate: date("due_date").notNull(),
+    done: boolean("done").notNull().default(false),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("milestones_plan_idx").on(t.planId, t.dueDate)],
+);
+
+/** One row per checked routine day (جيم اليوم؟ ✓). */
+export const routineChecks = pgTable(
+  "routine_checks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("routine_day_uq").on(t.planId, t.day)],
+);
+
+/** Captured ideas — unprocessed by definition; the strip nags until sorted. */
+export const ideas = pgTable("ideas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
@@ -171,3 +219,5 @@ export type Subtask = typeof subtasks.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type Commitment = typeof commitments.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
+export type Milestone = typeof milestones.$inferSelect;
+export type Idea = typeof ideas.$inferSelect;

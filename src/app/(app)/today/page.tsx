@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, CalendarClock } from "lucide-react";
+import { RoutinesToday } from "@/components/plans/routines-today";
 import { QuickAdd } from "@/components/tasks/quick-add";
 import { TaskGroup } from "@/components/tasks/task-row";
 import { TaskPanel } from "@/components/tasks/task-panel";
@@ -8,6 +9,7 @@ import { getCurrentSession } from "@/lib/auth";
 import { formatSAR } from "@/lib/currency";
 import { daysUntil, dueLabel, greeting, todayISO, todayLongLabel } from "@/lib/dates";
 import { upcomingRenewals } from "@/lib/queries/finance";
+import { routinesForToday } from "@/lib/queries/plans";
 import {
   completedTodayCount,
   getTask,
@@ -27,12 +29,13 @@ export default async function TodayPage({
   const { user } = await getCurrentSession();
   const params = await searchParams;
 
-  const [todayTasks, upcoming, areas, doneCount, renewals] = await Promise.all([
+  const [todayTasks, upcoming, areas, doneCount, renewals, routines] = await Promise.all([
     tasksForToday(),
     tasksUpcoming(),
     listAreas(),
     completedTodayCount(),
     upcomingRenewals(7),
+    routinesForToday(),
   ]);
 
   const detail = params.task ? await getTask(params.task) : null;
@@ -68,6 +71,8 @@ export default async function TodayPage({
 
       <div className="space-y-10">
         <QuickAdd areas={areas} defaultDate={today} />
+
+        <RoutinesToday routines={routines} />
 
         {/* today's tasks */}
         {todayTasks.length > 0 ? (

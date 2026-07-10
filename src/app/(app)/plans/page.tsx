@@ -1,25 +1,24 @@
 import type { Metadata } from "next";
-import { asc } from "drizzle-orm";
-import { db } from "@/db";
-import { plans } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
-import { PlansBoard } from "@/components/plans/plans-board";
+import { PlansView } from "@/components/plans/plans-view";
+import { WeeklyReview } from "@/components/plans/weekly-review";
+import { listActivePlans, listIdeas } from "@/lib/queries/plans";
+import { timelineWindow } from "@/lib/timeline";
 
 export const metadata: Metadata = { title: "الخطط" };
 
 export default async function PlansPage() {
-  const allPlans = await db
-    .select()
-    .from(plans)
-    .orderBy(asc(plans.sortOrder), asc(plans.createdAt));
+  const win = timelineWindow();
+  const [ideas, plans] = await Promise.all([listIdeas(), listActivePlans(win)]);
 
   return (
     <>
       <PageHeader
         title="الخطـــط"
-        description="الآن، قريبًا، ويومًا ما — وعندما تنضج الخطة حوّلها إلى مهمة."
+        description="خارطة الزمن — خططك مرسومة على الأسابيع، لا مكدّسة في قوائم."
+        actions={<WeeklyReview ideas={ideas} plans={plans} win={win} />}
       />
-      <PlansBoard plans={allPlans} />
+      <PlansView ideas={ideas} plans={plans} win={win} />
     </>
   );
 }
