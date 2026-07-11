@@ -1,0 +1,9 @@
+{
+  "name": "xsnap",
+  "private": true,
+  "type": "module",
+  "description": "Daily X profile stats via a logged-in browser session — feeds HQ's نبض المنصات",
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

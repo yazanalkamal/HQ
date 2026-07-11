@@ -5,21 +5,42 @@
 Personal life-HQ web app for exactly ONE user (Yazan). Arabic UI, RTL, at
 **https://hq.al-kamal.net**. Sections:
 
-- **اليوم** (home): greeting + Gregorian/Hijri date, today's tasks, روتين
-  اليوم checkboxes, upcoming subscription renewals, quick-add.
+- **اليوم** (home): greeting + Gregorian/Hijri date, then the summary strip
+  (قمرة اليوم: one linked cell per section — tasks counts live HERE, not in
+  the hero), then **نبض المنصات** (Twitch/Discord/X cards: headline number,
+  weekly delta, 30-day sparkline, Twitch live chip, X session-health red
+  state — hidden entirely until first data), today's tasks, روتين اليوم
+  checkboxes, upcoming renewals, quick-add. Platform data arrives ONLY via
+  `POST /api/stats/ingest` (bearer `STATS_INGEST_SECRET`, exempt in
+  proxy.ts, deliberately NOT audited — machine telemetry): StreamBot pushes
+  Twitch+Discord (daily snapshot 06:00 + ~3-min live ping; see
+  `src/services/stats_snapshot.py` in the streambot repo), the `xsnap`
+  compose service scrapes X (@POGYaz) via a logged-in browser session
+  (`xsnap/`, state volume seeded once with `xsnap/login.mjs` on a desktop).
 - **المهام**: week strip of real days (`?d=YYYY-MM-DD`, `?view=undated|done`)
-  → day board with progress bar; task cards with hover quick-actions;
-  quick-add on top + ghost add-row under lists.
+  → day board with progress bar; task cards with hover quick-actions.
+  Adding = the focused task composer (global overlay mounted in the app
+  layout; `N` key or «مهمة جديدة» buttons via the `hq:composer` window
+  event; Enter adds-and-chains; date/priority/area/plan controls always
+  visible; default date follows the board). Inline add inputs were removed
+  by explicit decision (2026-07-10) — don't re-add them.
 - **المالية**: subscriptions (auto-rolled renewals) + commitments + income →
   free-to-spend + "أقدر أشتريه؟", SAR.
-- **الخطط**: "خارطة الزمن" — 12-week RTL time canvas (`src/lib/timeline.ts`).
-  Plans are bars; `kind: project` (milestone ◆ diamonds, mandatory next-step,
-  متعثرة flag when empty) or `kind: routine` (cadence N×/week ribbon fed by
-  `routine_checks`). One level of sub-plans (`plans.parent_id`); tasks can
-  belong to a plan (`tasks.plan_id`, count toward bar progress). Ideas
-  capture strip + Ctrl+K "فكرة" feed the canvas; مراجعة أسبوعية sheet.
-  Row click = inline expansion (daily management); the sheet is only
-  "تحرير كامل". PLAN_COLORS (timeline.ts) ≠ AREA_COLORS (areas.ts).
+- **الخطط**: "قمرة القيادة" — action-first plan cards (2026-07-10 redesign
+  that replaced the Gantt time canvas). Each project card leads with its
+  next step: «أنجزتها» logs it to `plan_steps` (سجل الدفعات) and asks for
+  the next; an empty step = متعثرة chip + inline rescue input on the card.
+  Card gauge = progress fill + time tick (fill behind tick = behind
+  schedule). Attention-first sorting (late milestones, then stalled).
+  Card expansion = the management surface (milestones ◆, plan tasks,
+  sub-plans, step log); the sheet is only "تحرير كامل". Routines get their
+  own week-dots section (7 real days from `routine_checks`, past days
+  clickable to fix; cadence N×/week). «الخارطة» (`?view=map`) = read-only
+  12-week zoom-out (`src/lib/timeline.ts`). New plans via the plan composer
+  (`P` key / `hq:plan-composer`); ideas strip + Ctrl+K "فكرة" feed it
+  (فكرة → خطة prefills). One level of sub-plans (`plans.parent_id`); tasks
+  can belong to a plan (`tasks.plan_id`, count toward progress).
+  PLAN_COLORS (timeline.ts) ≠ AREA_COLORS (areas.ts).
 - **الإدارة**: sessions with revoke, audit log.
 
 A notes section existed and was REMOVED by explicit decision (2026-07-02) —
@@ -129,13 +150,19 @@ Features are verified in a REAL browser before "done": playwright-core with
 ## Feature-map (where things live)
 
 - Timeline math: `src/lib/timeline.ts` · date/week helpers: `src/lib/dates.ts`
-- Queries per section: `src/lib/queries/{tasks,plans,finance}.ts`
+- Queries per section: `src/lib/queries/{tasks,plans,finance,stats}.ts`
+- اليوم strips: `src/components/today/` (summary-strip = قمرة اليوم cells,
+  platform-pulse = نبض المنصات cards + server-rendered sparklines)
 - Server actions: `src/app/(app)/{tasks,plans,finance}/actions.ts` +
   `admin/actions.ts`, `notes` pattern removed
-- Plans UI: `src/components/plans/` (plans-view = canvas + expansion,
-  plan-sheet = full edit, plan-editors = shared milestone/task editors)
-- Tasks UI: `src/components/tasks/` (day-strip, task-row cards, quick-add,
-  add-task-row, task-panel sheet, areas)
+- Plans UI: `src/components/plans/` (plans-view = cockpit shell + health
+  strip + routines, plan-card = card + momentum loop, plan-composer = P
+  overlay, plan-map = read-only zoom-out, plans-header-controls = view
+  toggle + new-plan button, plan-sheet = full edit, plan-editors = shared
+  milestone/task editors)
+- Tasks UI: `src/components/tasks/` (day-strip, task-row cards,
+  task-composer = global N overlay mounted in `(app)/layout.tsx`,
+  new-task-button, task-panel sheet, areas)
 - Shell: `src/components/shell/` (sidebar, command palette Ctrl+K, search
   button); `/api/search` feeds the palette
 

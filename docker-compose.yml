@@ -32,6 +32,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       ALLOWED_EMAIL: ${ALLOWED_EMAIL}
+      STATS_INGEST_SECRET: ${STATS_INGEST_SECRET}
     ports:
       - "127.0.0.1:3100:3000"
     depends_on:
@@ -50,5 +51,20 @@ services:
       postgres:
         condition: service_healthy
 
+  # X (@POGYaz) stats scraper — نبض المنصات. The logged-in session lives in
+  # the xsnap-state volume; seed it once via xsnap/login.mjs (see its header).
+  xsnap:
+    build: ./xsnap
+    restart: unless-stopped
+    environment:
+      HQ_STATS_URL: http://app:3000
+      STATS_INGEST_SECRET: ${STATS_INGEST_SECRET}
+      X_HANDLE: ${X_HANDLE:-POGYaz}
+    volumes:
+      - xsnap-state:/data
+    depends_on:
+      - app
+
 volumes:
   pgdata:
+  xsnap-state:

@@ -296,7 +296,7 @@ export function PlanSheet({
                   }
                 >
                   <CheckCircle2 className="size-3.5" />
-                  أنجزتها 🎉
+                  أنجزت الخطة كلها 🎉
                 </Button>
               ) : null}
             </div>

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CommandPalette } from "@/components/shell/command-palette";
@@ -5,7 +6,10 @@ import { SearchButton } from "@/components/shell/search-button";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { SidebarNavCompact } from "@/components/shell/sidebar-nav-compact";
 import { UserBlock } from "@/components/shell/user-block";
+import { TaskComposer } from "@/components/tasks/task-composer";
 import { getCurrentSession } from "@/lib/auth";
+import { plansForPicker } from "@/lib/queries/plans";
+import { listAreas } from "@/lib/queries/tasks";
 
 export default async function AppLayout({
   children,
@@ -13,6 +17,8 @@ export default async function AppLayout({
   // Real (DB-backed) auth check — the edge proxy only did a cookie sniff.
   const { session, user } = await getCurrentSession();
   if (!session) redirect("/signin");
+
+  const [areas, pickerPlans] = await Promise.all([listAreas(), plansForPicker()]);
 
   return (
     <div className="min-h-dvh">
@@ -54,6 +60,9 @@ export default async function AppLayout({
       </main>
 
       <CommandPalette />
+      <Suspense>
+        <TaskComposer areas={areas} plans={pickerPlans} />
+      </Suspense>
     </div>
   );
 }

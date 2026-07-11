@@ -10,10 +10,11 @@ import { requestMeta } from "@/lib/auth/session";
 import { audit } from "@/lib/audit";
 import { AREA_COLORS } from "@/lib/areas";
 
-/** Revalidate every surface that renders tasks. */
+/** Revalidate every surface that renders tasks (plan bars count task progress). */
 function revalidateTaskViews() {
   revalidatePath("/tasks");
   revalidatePath("/today");
+  revalidatePath("/plans");
 }
 
 async function auditAs(action: string, entityId: string, detail?: Record<string, unknown>) {
@@ -39,6 +40,7 @@ const createTaskSchema = z.object({
   dueTime: hhmm.nullish(),
   priority: z.number().int().min(0).max(2).default(0),
   areaId: z.string().uuid().nullish(),
+  planId: z.string().uuid().nullish(),
   description: z.string().max(10_000).default(""),
 });
 
@@ -54,6 +56,7 @@ export async function createTask(input: z.input<typeof createTaskSchema>) {
       dueTime: data.dueTime ?? null,
       priority: data.priority,
       areaId: data.areaId ?? null,
+      planId: data.planId ?? null,
     })
     .returning();
   await auditAs("task.create", task.id, { title: task.title });

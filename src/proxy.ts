@@ -11,7 +11,11 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublic =
-    pathname === "/signin" || pathname.startsWith("/api/auth/");
+    pathname === "/signin" ||
+    pathname.startsWith("/api/auth/") ||
+    // machine ingest (StreamBot / xsnap) — no cookie by design; the route
+    // itself enforces the STATS_INGEST_SECRET bearer
+    pathname === "/api/stats/ingest";
 
   if (!hasSession && !isPublic) {
     const url = request.nextUrl.clone();

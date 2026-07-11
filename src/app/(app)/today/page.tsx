@@ -2,14 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, CalendarClock } from "lucide-react";
 import { RoutinesToday } from "@/components/plans/routines-today";
-import { QuickAdd } from "@/components/tasks/quick-add";
+import { NewTaskButton } from "@/components/tasks/new-task-button";
 import { TaskGroup } from "@/components/tasks/task-row";
 import { TaskPanel } from "@/components/tasks/task-panel";
-import { getCurrentSession } from "@/lib/auth";
 import { formatSAR } from "@/lib/currency";
 import { daysUntil, dueLabel, greeting, todayISO, todayLongLabel } from "@/lib/dates";
-import { upcomingRenewals } from "@/lib/queries/finance";
-import { routinesForToday } from "@/lib/queries/plans";
+import { PlatformPulseStrip } from "@/components/today/platform-pulse";
+import { SummaryStrip } from "@/components/today/summary-strip";
+import { financePulse, upcomingRenewals } from "@/lib/queries/finance";
+import { plansPulse, routinesForToday } from "@/lib/queries/plans";
+import { latestSnapshotDay, platformPulse, xSessionBroken } from "@/lib/queries/stats";
 import {
   completedTodayCount,
   getTask,
@@ -26,7 +28,6 @@ export default async function TodayPage({
 }: {
   searchParams: Promise<{ task?: string }>;
 }) {
-  const { user } = await getCurrentSession();
   const params = await searchParams;
 
   const [todayTasks, upcoming, areas, doneCount, renewals, routines] = await Promise.all([
@@ -37,6 +38,13 @@ export default async function TodayPage({
     upcomingRenewals(7),
     routinesForToday(),
   ]);
+  const [planPulse, finPulse, pulses, xBroken, snapshotDay] = await Promise.all([
+    plansPulse(),
+    financePulse(),
+    platformPulse(),
+    xSessionBroken(),
+    latestSnapshotDay(),
+  ]);
 
   const detail = params.task ? await getTask(params.task) : null;
 
@@ -44,34 +52,35 @@ export default async function TodayPage({
   const overdue = todayTasks.filter((t) => t.dueDate && t.dueDate < today);
   const dueToday = todayTasks.filter((t) => !t.dueDate || t.dueDate === today);
   const dates = todayLongLabel();
-  const firstName = user?.name.split(" ")[0] || "";
+  // his chosen display name — not the Google account name (kashida is fine
+  // here: the hero is a display heading, same treatment as المقـــر)
+  const firstName = "يــاز";
 
   return (
     <>
       {/* hero */}
-      <header className="mb-10 space-y-2">
-        <h1 className="font-display text-4xl font-bold tracking-tight md:text-5xl">
-          {greeting()}
-          {firstName ? `، ${firstName}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground" data-numeric>
-          {dates.gregorian} · {dates.hijri}
-        </p>
-        <p className="text-sm text-muted-foreground" data-numeric>
-          {doneCount > 0
-            ? `أنجزت ${doneCount} ${doneCount === 1 ? "مهمة" : doneCount === 2 ? "مهمتين" : "مهام"} اليوم`
-            : todayTasks.length > 0
-              ? `أمامك ${todayTasks.length} ${todayTasks.length === 1 ? "مهمة" : "مهام"} اليوم`
-              : "لا مهام على جدول اليوم"}
-          {overdue.length > 0 ? (
-            <span className="text-destructive"> · {overdue.length} متأخرة</span>
-          ) : null}
-        </p>
+      <header className="mb-10 flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="font-display text-4xl font-bold tracking-tight md:text-5xl">
+            {greeting()}
+            {firstName ? `، ${firstName}` : ""}
+          </h1>
+          <p className="text-sm text-muted-foreground" data-numeric>
+            {dates.gregorian} · {dates.hijri}
+          </p>
+        </div>
+        <NewTaskButton className="mt-2" />
       </header>
 
-      <div className="space-y-10">
-        <QuickAdd areas={areas} defaultDate={today} />
+      {/* قمرة اليوم — task/plan/finance counts live here, not in the hero */}
+      <SummaryStrip
+        tasks={{ today: todayTasks.length, overdue: overdue.length, done: doneCount }}
+        plans={planPulse}
+        finance={finPulse}
+      />
 
+      <div className="space-y-10">
+        <PlatformPulseStrip pulses={pulses} xBroken={xBroken} snapshotDay={snapshotDay} />
         <RoutinesToday routines={routines} />
 
         {/* today's tasks */}

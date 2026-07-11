@@ -15,6 +15,10 @@ export function formatDateTime(d: Date): string {
   }).format(d);
 }
 
+export function formatCount(n: number): string {
+  return new Intl.NumberFormat(LOCALE).format(n);
+}
+
 export function formatRelative(d: Date, now: Date = new Date()): string {
   const rtf = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });
   const diffMs = d.getTime() - now.getTime();

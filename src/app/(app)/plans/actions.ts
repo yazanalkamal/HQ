@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { ideas, milestones, plans, routineChecks, tasks } from "@/db/schema";
+import { ideas, milestones, plans, planSteps, routineChecks, tasks } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { requestMeta } from "@/lib/auth/session";
 import { audit } from "@/lib/audit";
@@ -146,18 +146,23 @@ export async function deletePlan(id: string) {
   revalidate();
 }
 
-/** Check off the current next step and set the new one (may be empty). */
+/**
+ * Check off the current next step and set the new one (may be empty).
+ * The done step lands in سجل الدفعات — momentum stays visible.
+ */
 export async function completeNextStep(planId: string, newStep: string) {
   await requireUser();
   z.string().uuid().parse(planId);
   const next = z.string().trim().max(500).parse(newStep);
   const rows = await db.select().from(plans).where(eq(plans.id, planId));
   if (!rows[0]) throw new Error("الخطة غير موجودة");
+  const done = rows[0].nextStep.trim();
+  if (done) await db.insert(planSteps).values({ planId, text: done });
   await db
     .update(plans)
     .set({ nextStep: next, updatedAt: new Date() })
     .where(eq(plans.id, planId));
-  await auditAs("plan.step_done", planId, { done: rows[0].nextStep, next });
+  await auditAs("plan.step_done", planId, { done, next });
   revalidate();
 }
 

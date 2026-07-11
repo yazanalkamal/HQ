@@ -2,6 +2,10 @@
 
 # dependencies
 /node_modules
+xsnap/node_modules
+
+# xsnap login state — a real logged-in X session, must NEVER reach git
+xsnap/x-state.json
 /.pnp
 .pnp.*
 .yarn/*

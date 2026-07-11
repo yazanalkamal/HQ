@@ -1,15 +1,17 @@
 import "server-only";
-import { and, asc, desc, eq, gte, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   ideas,
   milestones,
   plans,
+  planSteps,
   routineChecks,
   tasks,
   type Idea,
   type Milestone,
   type Plan,
+  type PlanStep,
 } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
 import { timelineWindow, weekIndex, type TimelineWindow } from "@/lib/timeline";
@@ -23,9 +25,13 @@ export type PlanWithDetail = Plan & {
   depth: 0 | 1;
   /** routine plans: week column index → checks done that week */
   weekFills: Record<number, number>;
+  /** routine plans: ISO days checked in the CURRENT week (the 7 dots) */
+  checkDays: string[];
   checkedToday: boolean;
   progress: number; // 0..1 — projects: done milestones + done tasks ratio
   stalled: boolean;
+  /** سجل الدفعات — latest completed next steps, newest first */
+  steps: PlanStep[];
 };
 
 export async function listIdeas(): Promise<Idea[]> {
@@ -36,7 +42,7 @@ export async function listActivePlans(
   win: TimelineWindow = timelineWindow(),
 ): Promise<PlanWithDetail[]> {
   const today = todayISO();
-  const [planRows, msRows, checkRows, taskRows] = await Promise.all([
+  const [planRows, msRows, checkRows, stepRows, taskRows] = await Promise.all([
     db
       .select()
       .from(plans)
@@ -47,6 +53,7 @@ export async function listActivePlans(
       .select()
       .from(routineChecks)
       .where(gte(routineChecks.day, win.start)),
+    db.select().from(planSteps).orderBy(desc(planSteps.doneAt)),
     db
       .select({
         id: tasks.id,
@@ -69,6 +76,9 @@ export async function listActivePlans(
       const w = weekIndex(c.day, win.start);
       if (w >= 0) weekFills[w] = (weekFills[w] ?? 0) + 1;
     }
+    const checkDays = checks
+      .filter((c) => weekIndex(c.day, win.start) === win.todayWeek)
+      .map((c) => c.day);
     const doneCount = ms.filter((m) => m.done).length + planTasks.filter((t) => t.done).length;
     const totalCount = ms.length + planTasks.length;
     return {
@@ -85,9 +95,11 @@ export async function listActivePlans(
         .map((c) => ({ id: c.id, title: c.title })),
       depth: p.parentId ? 1 : 0,
       weekFills,
+      checkDays,
       checkedToday: checks.some((c) => c.day === today),
       progress: p.kind === "project" && totalCount > 0 ? doneCount / totalCount : 0,
       stalled: p.kind === "project" && p.nextStep.trim() === "",
+      steps: stepRows.filter((s) => s.planId === p.id).slice(0, 8),
     };
   };
 
@@ -103,6 +115,33 @@ export async function listActivePlans(
     if (p.parentId && !ordered.includes(p)) ordered.push(p);
   }
   return ordered.map(detail);
+}
+
+export type InactivePlan = Pick<Plan, "id" | "title" | "color" | "kind" | "status" | "updatedAt">;
+
+/** Done + archived plans — the drawer under the cockpit; everything is recoverable. */
+export async function listInactivePlans(): Promise<InactivePlan[]> {
+  return db
+    .select({
+      id: plans.id,
+      title: plans.title,
+      color: plans.color,
+      kind: plans.kind,
+      status: plans.status,
+      updatedAt: plans.updatedAt,
+    })
+    .from(plans)
+    .where(ne(plans.status, "active"))
+    .orderBy(desc(plans.updatedAt));
+}
+
+/** Lightweight active-project list for the task composer's plan picker. */
+export async function plansForPicker(): Promise<{ id: string; title: string; color: string }[]> {
+  return db
+    .select({ id: plans.id, title: plans.title, color: plans.color })
+    .from(plans)
+    .where(and(eq(plans.status, "active"), eq(plans.kind, "project")))
+    .orderBy(asc(plans.startDate), asc(plans.createdAt));
 }
 
 /** Active routines with today's check state — for اليوم. */
@@ -139,6 +178,62 @@ export async function reviewCounts(): Promise<{ ideas: number; stalled: number }
   return {
     ideas: ideaRows.length,
     stalled: planRows.filter((p) => p.kind === "project" && p.nextStep.trim() === "").length,
+  };
+}
+
+export type PlansPulse = {
+  /** next step of the most attention-needing project that has one */
+  nextStep: { planTitle: string; text: string } | null;
+  lateMilestones: number;
+  stalled: number;
+  activeProjects: number;
+};
+
+/** The اليوم summary cell — same attention rule as the cockpit (late ≫ stalled). */
+export async function plansPulse(): Promise<PlansPulse> {
+  const today = todayISO();
+  const [planRows, msRows] = await Promise.all([
+    db
+      .select({
+        id: plans.id,
+        title: plans.title,
+        kind: plans.kind,
+        nextStep: plans.nextStep,
+        startDate: plans.startDate,
+      })
+      .from(plans)
+      .where(eq(plans.status, "active"))
+      .orderBy(asc(plans.startDate), asc(plans.createdAt)),
+    db
+      .select({ planId: milestones.planId, done: milestones.done, dueDate: milestones.dueDate })
+      .from(milestones),
+  ]);
+
+  const projects = planRows.filter((p) => p.kind === "project");
+  const lateByPlan = new Map<string, number>();
+  for (const m of msRows) {
+    if (!m.done && m.dueDate < today) {
+      lateByPlan.set(m.planId, (lateByPlan.get(m.planId) ?? 0) + 1);
+    }
+  }
+  const lateMilestones = projects.reduce((sum, p) => sum + (lateByPlan.get(p.id) ?? 0), 0);
+  const stalled = projects.filter((p) => p.nextStep.trim() === "").length;
+
+  // mirror planAttention() in plan-card.tsx: late milestones outweigh stalled
+  const top = [...projects]
+    .map((p) => ({
+      p,
+      score: ((lateByPlan.get(p.id) ?? 0) > 0 ? 2 : 0) + (p.nextStep.trim() === "" ? 1 : 0),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.p)
+    .find((p) => p.nextStep.trim() !== "");
+
+  return {
+    nextStep: top ? { planTitle: top.title, text: top.nextStep } : null,
+    lateMilestones,
+    stalled,
+    activeProjects: projects.length,
   };
 }
 

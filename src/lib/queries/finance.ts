@@ -3,7 +3,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { commitments, financeSettings, subscriptions } from "@/db/schema";
 import { todayISO } from "@/lib/dates";
-import { currentNextRenewal, type Cycle } from "@/lib/finance";
+import { currentNextRenewal, summarize, type Cycle } from "@/lib/finance";
 
 /** Subscription with numeric amount and the renewal rolled forward. */
 export type Sub = {
@@ -61,10 +61,35 @@ export async function getMonthlyIncome(): Promise<number> {
   return rows.length ? Number(rows[0].monthlyIncome) : 0;
 }
 
+export type FinancePulse = {
+  freeMonthly: number;
+  renewalsWeek: { count: number; total: number };
+};
+
+/** The اليوم summary cell: المتاح للصرف + renewals within 7 days. */
+export async function financePulse(): Promise<FinancePulse> {
+  const [subs, comms, income] = await Promise.all([
+    listSubscriptions(),
+    listCommitments(),
+    getMonthlyIncome(),
+  ]);
+  const week = upcomingRenewalsFrom(subs, 7);
+  return {
+    freeMonthly: summarize(subs, comms, income).freeMonthly,
+    renewalsWeek: {
+      count: week.length,
+      total: week.reduce((sum, s) => sum + s.amount, 0),
+    },
+  };
+}
+
 /** Active subs renewing within `days` (rolled forward), soonest first. */
 export async function upcomingRenewals(days: number): Promise<Sub[]> {
+  return upcomingRenewalsFrom(await listSubscriptions(), days);
+}
+
+function upcomingRenewalsFrom(subs: Sub[], days: number): Sub[] {
   const today = todayISO();
-  const subs = await listSubscriptions();
   const limitISO = new Date(
     Date.parse(today + "T00:00:00Z") + days * 86_400_000,
   )

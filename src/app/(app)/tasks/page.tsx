@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { AddTaskRow } from "@/components/tasks/add-task-row";
 import { AreaFilter } from "@/components/tasks/area-filter";
 import { AreasManager } from "@/components/tasks/areas-manager";
 import { DayStrip } from "@/components/tasks/day-strip";
-import { QuickAdd } from "@/components/tasks/quick-add";
+import { NewTaskButton } from "@/components/tasks/new-task-button";
 import { TaskGroup, TaskRow } from "@/components/tasks/task-row";
 import { TaskPanel } from "@/components/tasks/task-panel";
 import { dayLongLabel, startOfWeekISO, tasksCountLabel, todayISO } from "@/lib/dates";
@@ -67,9 +66,9 @@ export default async function TasksPage({
         />
 
         {view === "day" ? (
-          <DayBoard selected={selected} today={today} areaId={areaId} areas={areas} />
+          <DayBoard selected={selected} today={today} areaId={areaId} />
         ) : view === "undated" ? (
-          <UndatedBoard areaId={areaId} areas={areas} />
+          <UndatedBoard areaId={areaId} />
         ) : (
           <DoneBoard areaId={areaId} />
         )}
@@ -84,12 +83,10 @@ async function DayBoard({
   selected,
   today,
   areaId,
-  areas,
 }: {
   selected: string;
   today: string;
   areaId?: string;
-  areas: Awaited<ReturnType<typeof listAreas>>;
 }) {
   const [dayTasks, overdue] = await Promise.all([
     tasksForDay(selected, areaId),
@@ -105,7 +102,7 @@ async function DayBoard({
     <div className="space-y-6">
       {/* day header + progress */}
       <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold">
             {selected === today ? "اليوم — " : ""}
             {labels.gregorian}
@@ -113,11 +110,14 @@ async function DayBoard({
               {labels.hijri}
             </span>
           </h2>
-          {total > 0 ? (
-            <span className="text-xs text-muted-foreground" data-numeric>
-              أنجزت {doneToday.length} من {total}
-            </span>
-          ) : null}
+          <div className="flex items-center gap-4">
+            {total > 0 ? (
+              <span className="text-xs text-muted-foreground" data-numeric>
+                أنجزت {doneToday.length} من {total}
+              </span>
+            ) : null}
+            <NewTaskButton />
+          </div>
         </div>
         {total > 0 ? (
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
@@ -129,15 +129,6 @@ async function DayBoard({
         ) : null}
       </div>
 
-      <QuickAdd
-        key={selected + (areaId ?? "")}
-        areas={areas}
-        defaultDate={selected}
-        placeholder={
-          selected === today ? "أضف مهمة لليوم… ثم Enter" : `أضف مهمة لـ${labels.gregorian}… ثم Enter`
-        }
-      />
-
       {overdue.length > 0 ? (
         <TaskGroup
           heading={`متأخرة — من أيام سابقة (${overdue.length})`}
@@ -147,17 +138,11 @@ async function DayBoard({
       ) : null}
 
       {open.length > 0 ? (
-        <div className="space-y-2">
-          <TaskGroup heading={overdue.length ? "اليوم" : undefined} tasks={open} showDue={false} />
-          <AddTaskRow defaultDate={selected} />
-        </div>
+        <TaskGroup heading={overdue.length ? "اليوم" : undefined} tasks={open} showDue={false} />
       ) : (
-        <div className="space-y-2">
-          <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-            {total > 0 ? "أنجزت كل شيء — يوم نظيف ✓" : "لا مهام لهذا اليوم."}
-          </p>
-          <AddTaskRow defaultDate={selected} />
-        </div>
+        <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+          {total > 0 ? "أنجزت كل شيء — يوم نظيف ✓" : "لا مهام لهذا اليوم."}
+        </p>
       )}
 
       {doneToday.length > 0 ? (
@@ -179,35 +164,25 @@ async function DayBoard({
   );
 }
 
-async function UndatedBoard({
-  areaId,
-  areas,
-}: {
-  areaId?: string;
-  areas: Awaited<ReturnType<typeof listAreas>>;
-}) {
+async function UndatedBoard({ areaId }: { areaId?: string }) {
   const items = await tasksUndated(areaId);
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">
-        بدون تاريخ
-        <span className="ms-2 text-sm font-normal text-muted-foreground" data-numeric>
-          {tasksCountLabel(items.length) || "فارغة"}
-        </span>
-      </h2>
-      <QuickAdd key={"undated" + (areaId ?? "")} areas={areas} defaultDate={null} placeholder="أضف مهمة بلا موعد… ثم Enter" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-bold">
+          بدون تاريخ
+          <span className="ms-2 text-sm font-normal text-muted-foreground" data-numeric>
+            {tasksCountLabel(items.length) || "فارغة"}
+          </span>
+        </h2>
+        <NewTaskButton />
+      </div>
       {items.length > 0 ? (
-        <div className="space-y-2">
-          <TaskGroup tasks={items} />
-          <AddTaskRow defaultDate={null} />
-        </div>
+        <TaskGroup tasks={items} />
       ) : (
-        <div className="space-y-2">
-          <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-            كل مهامك لها مواعيد — ممتاز.
-          </p>
-          <AddTaskRow defaultDate={null} />
-        </div>
+        <p className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+          كل مهامك لها مواعيد — ممتاز.
+        </p>
       )}
     </div>
   );

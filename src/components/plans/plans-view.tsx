@@ -1,57 +1,45 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  ChevronDown,
-  Loader2,
-  ListTodo,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ArchiveRestore, ArrowLeft, ChevronDown, ListTodo, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   createIdea,
-  createPlan,
   deleteIdea,
   deletePlan,
   ideaToTask,
   toggleRoutineCheck,
   updatePlan,
 } from "@/app/(app)/plans/actions";
-import { MilestonesEditor, PlanTasks } from "./plan-editors";
-import { NextStepControl } from "./next-step-control";
+import { PlanCard, planAttention } from "./plan-card";
+import { PlanComposer, type ComposerIdea } from "./plan-composer";
+import { PlanMap } from "./plan-map";
 import { PlanSheet, type SheetRequest } from "./plan-sheet";
-import { TaskCheck } from "@/components/ui/task-check";
 import { addDaysISO, dueLabel, todayISO } from "@/lib/dates";
-import { addMonthsISO } from "@/lib/finance";
-import {
-  PLAN_COLORS,
-  WEEKS,
-  barSpan,
-  milestonePct,
-  monthSpans,
-  planHex,
-  weekDayLabel,
-  type TimelineWindow,
-} from "@/lib/timeline";
+import { planHex, type TimelineWindow } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 import type { Idea } from "@/db/schema";
-import type { PlanWithDetail } from "@/lib/queries/plans";
+import type { InactivePlan, PlanWithDetail } from "@/lib/queries/plans";
 
+/**
+ * قمرة القيادة — cards lead with each plan's next step; the routines get
+ * their own weekly-dots section; «الخارطة» is the read-only zoom-out.
+ */
 export function PlansView({
   ideas,
   plans,
+  inactive,
   win,
+  view,
 }: {
   ideas: Idea[];
   plans: PlanWithDetail[];
+  inactive: InactivePlan[];
   win: TimelineWindow;
+  view: "cards" | "map";
 }) {
   const [sheet, setSheet] = useState<SheetRequest>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const today = todayISO();
 
   // resolve the edited plan from the LATEST server data so the sheet
   // reflects milestone/field changes immediately
@@ -63,43 +51,61 @@ export function PlansView({
         })()
       : sheet;
 
+  const activeIds = new Set(plans.map((p) => p.id));
+  const projects = plans.filter(
+    (p) => p.kind === "project" && (!p.parentId || !activeIds.has(p.parentId)),
+  );
+  const routines = plans.filter((p) => p.kind === "routine");
+  // attention-first: plans that need you float to the top (stable within ties)
+  const cards = [...projects].sort((a, b) => planAttention(b, today) - planAttention(a, today));
+
   return (
     <div className="space-y-7">
-      <CaptureStrip ideas={ideas} onPlanFromIdea={(i) => setSheet({ mode: "create", fromIdea: i })} />
+      <CaptureStrip ideas={ideas} />
 
-      <div className="rounded-xl border p-5 pt-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            12 أسبوعًا — الأسابيع أعمدة، وخططك أشرطة عليها.
-          </p>
-          <button
-            type="button"
-            onClick={() => setSheet({ mode: "create" })}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <Plus className="size-3.5" />
-            خطة جديدة
-          </button>
-        </div>
+      {view === "map" ? (
+        <PlanMap plans={plans.filter((p) => p.kind === "project")} win={win} />
+      ) : (
+        <>
+          {projects.length > 0 ? (
+            <HealthStrip projects={projects} today={today} />
+          ) : null}
 
-        {plans.length === 0 ? (
-          <EmptyCanvas onCreate={() => setSheet({ mode: "create" })} />
-        ) : (
-          <Canvas
-            plans={plans}
-            win={win}
-            expandedId={expandedId}
-            onToggle={(p) => setExpandedId(expandedId === p.id ? null : p.id)}
-            onFullEdit={(p) => setSheet({ mode: "edit", planId: p.id })}
-          />
-        )}
+          {projects.length === 0 ? (
+            <EmptyCockpit />
+          ) : (
+            <div className="space-y-3.5">
+              {cards.map((p) => (
+                <PlanCard
+                  key={p.id}
+                  plan={p}
+                  expanded={expandedId === p.id}
+                  onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                  onFullEdit={() => setSheet({ mode: "edit", planId: p.id })}
+                  onOpenPlan={(planId) => setSheet({ mode: "edit", planId })}
+                  onCreateSub={(parent) => setSheet({ mode: "create", parent })}
+                />
+              ))}
+              <p className="px-1 text-[11.5px] text-muted-foreground">
+                الخط العمودي على شريط التقدم = أين يقف الزمن. تقدّمٌ خلف الخط يعني أنك متأخر عن الجدول.
+              </p>
+            </div>
+          )}
 
-        {/* quick-create — under the list, zero-form */}
-        <QuickAddPlan
-          usedColors={plans.map((p) => p.color)}
-          onCreated={(id) => setExpandedId(id)}
-        />
-      </div>
+          {routines.length > 0 ? (
+            <RoutinesSection
+              routines={routines}
+              win={win}
+              today={today}
+              onEdit={(planId) => setSheet({ mode: "edit", planId })}
+            />
+          ) : null}
+
+          {inactive.length > 0 ? <InactiveDrawer plans={inactive} /> : null}
+        </>
+      )}
+
+      <PlanComposer usedColors={plans.map((p) => p.color)} onCreated={(id) => setExpandedId(id)} />
 
       {resolvedSheet ? (
         <PlanSheet
@@ -114,15 +120,55 @@ export function PlansView({
   );
 }
 
+// ── health ───────────────────────────────────────────────────────────────────
+
+function HealthStrip({ projects, today }: { projects: PlanWithDetail[]; today: string }) {
+  const moving = projects.filter((p) => planAttention(p, today) === 0).length;
+  const stalled = projects.filter((p) => p.stalled).length;
+  const lateMs = projects.flatMap((p) => p.milestones).filter((m) => !m.done && m.dueDate < today);
+  const upcoming = projects
+    .flatMap((p) => p.milestones)
+    .filter((m) => !m.done && m.dueDate >= today)
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0];
+
+  const parts: React.ReactNode[] = [];
+  if (moving > 0) {
+    parts.push(
+      <b key="m">{moving === 1 ? "مشروع واحد يتحرك" : moving === 2 ? "مشروعان يتحركان" : `${moving} مشاريع تتحرك`}</b>,
+    );
+  }
+  if (stalled > 0) {
+    parts.push(
+      <b key="s">{stalled === 1 ? "واحد متعثر" : stalled === 2 ? "اثنان متعثران" : `${stalled} متعثرة`}</b>,
+    );
+  }
+  if (lateMs.length > 0) {
+    parts.push(
+      <b key="l" className="text-destructive">
+        {lateMs.length === 1 ? "معلم متأخر" : `${lateMs.length} معالم متأخرة`}
+      </b>,
+    );
+  }
+  if (upcoming) {
+    parts.push(<span key="u">أقرب معلم: {dueLabel(upcoming.dueDate, today)}</span>);
+  }
+  if (parts.length === 0) return null;
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-xs text-muted-foreground" data-numeric>
+      {parts.map((part, i) => (
+        <span key={i} className="flex items-center gap-2.5">
+          {i > 0 ? <span className="text-border">·</span> : null}
+          {part}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 // ── capture ──────────────────────────────────────────────────────────────────
 
-function CaptureStrip({
-  ideas,
-  onPlanFromIdea,
-}: {
-  ideas: Idea[];
-  onPlanFromIdea: (idea: Idea) => void;
-}) {
+function CaptureStrip({ ideas }: { ideas: Idea[] }) {
   const [, startTransition] = useTransition();
   const [text, setText] = useState("");
 
@@ -151,7 +197,7 @@ function CaptureStrip({
       {ideas.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 border-t bg-secondary/60 px-3.5 py-2.5">
           {ideas.map((idea) => (
-            <IdeaChip key={idea.id} idea={idea} onPlan={() => onPlanFromIdea(idea)} />
+            <IdeaChip key={idea.id} idea={idea} />
           ))}
         </div>
       ) : null}
@@ -159,7 +205,7 @@ function CaptureStrip({
   );
 }
 
-function IdeaChip({ idea, onPlan }: { idea: Idea; onPlan: () => void }) {
+function IdeaChip({ idea }: { idea: Idea }) {
   const [, startTransition] = useTransition();
   return (
     <span className="inline-flex items-center gap-2 rounded-full border bg-background py-1 ps-3 pe-1 text-xs">
@@ -167,7 +213,13 @@ function IdeaChip({ idea, onPlan }: { idea: Idea; onPlan: () => void }) {
       <span className="inline-flex items-center gap-0.5">
         <button
           type="button"
-          onClick={onPlan}
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent<{ idea: ComposerIdea }>("hq:plan-composer", {
+                detail: { idea: { id: idea.id, text: idea.text } },
+              }),
+            )
+          }
           className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 font-medium transition-colors hover:bg-accent"
         >
           <ArrowLeft className="size-3" />
@@ -194,470 +246,214 @@ function IdeaChip({ idea, onPlan }: { idea: Idea; onPlan: () => void }) {
   );
 }
 
-// ── canvas ───────────────────────────────────────────────────────────────────
+// ── routines ─────────────────────────────────────────────────────────────────
 
-function Canvas({
-  plans,
+const dayLetterFmt = new Intl.DateTimeFormat("ar", { timeZone: "UTC", weekday: "narrow" });
+
+function RoutinesSection({
+  routines,
   win,
-  expandedId,
-  onToggle,
-  onFullEdit,
+  today,
+  onEdit,
 }: {
-  plans: PlanWithDetail[];
+  routines: PlanWithDetail[];
   win: TimelineWindow;
-  expandedId: string | null;
-  onToggle: (p: PlanWithDetail) => void;
-  onFullEdit: (p: PlanWithDetail) => void;
+  today: string;
+  onEdit: (planId: string) => void;
 }) {
-  const months = monthSpans(win.weekStarts);
-  const today = todayISO();
-
-  // dynamic row numbers: each plan takes one row, +1 when expanded
-  const rowStarts = plans.reduce<number[]>((acc, _p, i) => {
-    if (i === 0) return [4];
-    acc.push(acc[i - 1] + (expandedId === plans[i - 1].id ? 2 : 1));
-    return acc;
-  }, []);
+  const weekDays = Array.from({ length: 7 }, (_, i) =>
+    addDaysISO(win.weekStarts[win.todayWeek], i),
+  );
 
   return (
-    <div className="overflow-x-auto">
-      <div
-        className="relative grid min-w-[1040px]"
-        style={{ gridTemplateColumns: `250px repeat(${WEEKS}, minmax(58px, 1fr))` }}
-      >
-        {/* current-week highlight */}
-        <div
-          className="relative rounded-md bg-foreground/[0.045]"
-          style={{ gridColumn: win.todayWeek + 2, gridRow: "1 / -1" }}
-        >
-          <span className="absolute -top-1 right-1/2 z-10 translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold text-primary-foreground">
-            أنت هنا
-          </span>
-        </div>
-
-        {/* month headers */}
-        {months.map((m) => (
-          <span
-            key={m.label + m.from}
-            className="pt-4 text-sm font-bold text-muted-foreground"
-            style={{ gridColumn: `${m.from + 2} / span ${m.span}`, gridRow: 2 }}
-          >
-            {m.label}
-          </span>
+    <section>
+      <h2 className="text-base font-bold">الروتينات</h2>
+      <p className="mb-3.5 mt-0.5 text-xs text-muted-foreground">
+        إيقاعك الأسبوعي — اضغط أي يوم مضى لتصحيحه.
+      </p>
+      <div className="rounded-2xl border">
+        {routines.map((r, i) => (
+          <RoutineRow key={r.id} plan={r} weekDays={weekDays} today={today} first={i === 0} onEdit={() => onEdit(r.id)} />
         ))}
-
-        {/* week numbers */}
-        {win.weekStarts.map((w, i) => (
-          <span
-            key={w}
-            className="border-b pb-2.5 pt-1.5 text-xs text-muted-foreground"
-            style={{ gridColumn: i + 2, gridRow: 3 }}
-            data-numeric
-          >
-            {weekDayLabel(w)}
-          </span>
-        ))}
-
-        {/* plan rows */}
-        {plans.map((p, i) => {
-          const span = barSpan(p.startDate, p.endDate, win);
-          const expanded = expandedId === p.id;
-          const row = rowStarts[i];
-          return (
-            <div key={p.id} className="contents">
-              {/* label */}
-              <div
-                className={cn(
-                  "py-4 pe-4",
-                  p.depth === 1 && "ps-6 py-3",
-                  !expanded && "border-b",
-                )}
-                style={{ gridColumn: 1, gridRow: row }}
-              >
-                <button
-                  type="button"
-                  onClick={() => onToggle(p)}
-                  className={cn(
-                    "flex items-center gap-1.5 text-start",
-                    p.depth === 1 ? "text-sm font-medium text-muted-foreground" : "text-[15px] font-bold",
-                  )}
-                >
-                  <ChevronDown
-                    className={cn(
-                      "size-3.5 shrink-0 text-muted-foreground transition-transform",
-                      expanded && "rotate-180",
-                    )}
-                  />
-                  {p.depth === 1 ? <span className="text-muted-foreground">↳</span> : null}
-                  <span className="hover:underline">{p.title}</span>
-                </button>
-                {p.kind === "project" ? (
-                  <NextStepControl plan={p} />
-                ) : (
-                  <RoutineToday plan={p} />
-                )}
-              </div>
-
-              {/* bar area */}
-              <div
-                className={cn("relative", !expanded && "border-b")}
-                style={{ gridColumn: `2 / ${WEEKS + 2}`, gridRow: row }}
-              >
-                {span ? (
-                  p.kind === "project" ? (
-                    <ProjectBar plan={p} span={span} today={today} onOpen={() => onToggle(p)} />
-                  ) : (
-                    <RoutineRibbon plan={p} span={span} win={win} onOpen={() => onToggle(p)} />
-                  )
-                ) : (
-                  <p className="flex h-full items-center px-2 text-xs text-muted-foreground">
-                    خارج نافذة الأسابيع الحالية ({dueLabel(p.startDate, today)})
-                  </p>
-                )}
-              </div>
-
-              {/* inline expansion — sticky-pinned to the start edge so it
-                  stays fully visible inside the horizontally-scrolling canvas */}
-              {expanded ? (
-                <div
-                  className="border-b pb-5"
-                  style={{ gridColumn: "1 / -1", gridRow: row + 1 }}
-                >
-                  <div className="sticky start-0 max-w-4xl">
-                    <PlanExpansion plan={p} win={win} onFullEdit={() => onFullEdit(p)} />
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
       </div>
-    </div>
+    </section>
   );
 }
 
-/** In-place plan management — the sheet is now only for full edits. */
-function PlanExpansion({
+function RoutineRow({
   plan,
-  win,
-  onFullEdit,
+  weekDays,
+  today,
+  first,
+  onEdit,
 }: {
   plan: PlanWithDetail;
-  win: TimelineWindow;
-  onFullEdit: () => void;
+  weekDays: string[];
+  today: string;
+  first: boolean;
+  onEdit: () => void;
 }) {
   const [, startTransition] = useTransition();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const thisWeek = plan.weekFills[win.todayWeek] ?? 0;
-
-  return (
-    <div className="rounded-xl bg-secondary/50 px-5 py-4">
-      <div className="grid gap-6 md:grid-cols-2">
-        {plan.kind === "project" ? (
-          <MilestonesEditor plan={plan} planStart={plan.startDate} planEnd={plan.endDate} />
-        ) : (
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-muted-foreground">هذا الأسبوع</h3>
-            <p className="text-sm" data-numeric>
-              {thisWeek}/{plan.cadence} —{" "}
-              {thisWeek >= plan.cadence ? "أتممت هدف الأسبوع ✓" : `تبقّى ${plan.cadence - thisWeek}`}
-            </p>
-            {plan.description ? (
-              <p className="text-sm text-muted-foreground">{plan.description}</p>
-            ) : null}
-          </div>
-        )}
-        <PlanTasks plan={plan} />
-      </div>
-
-      <div className="mt-4 flex items-center gap-2 border-t pt-3.5">
-        <ExpansionBtn onClick={onFullEdit}>
-          <Pencil className="size-3.5" />
-          تحرير كامل
-        </ExpansionBtn>
-        <ExpansionBtn
-          onClick={() => startTransition(() => updatePlan({ id: plan.id, status: "done" }))}
-        >
-          <CheckCircle2 className="size-3.5" />
-          أنجزتها 🎉
-        </ExpansionBtn>
-        <ExpansionBtn
-          className={cn("ms-auto", confirmDelete && "border-destructive text-destructive")}
-          onClick={() => {
-            if (!confirmDelete) {
-              setConfirmDelete(true);
-              setTimeout(() => setConfirmDelete(false), 3000);
-              return;
-            }
-            startTransition(() => deletePlan(plan.id));
-          }}
-        >
-          <Trash2 className="size-3.5" />
-          {confirmDelete ? "متأكد؟" : "حذف"}
-        </ExpansionBtn>
-      </div>
-    </div>
-  );
-}
-
-function ExpansionBtn({ className, ...props }: React.ComponentProps<"button">) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        "flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-/** Zero-form plan creation: title + kind + duration, sensible defaults. */
-function QuickAddPlan({
-  usedColors,
-  onCreated,
-}: {
-  usedColors: string[];
-  onCreated: (id: string) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<"project" | "routine">("project");
-  const [months, setMonths] = useState(2);
-  const [pending, startTransition] = useTransition();
-
-  function pickColor(): string {
-    const keys = Object.keys(PLAN_COLORS);
-    const counts = keys.map((k) => usedColors.filter((c) => c === k).length);
-    return keys[counts.indexOf(Math.min(...counts))];
-  }
-
-  function submit() {
-    const t = title.trim();
-    if (!t || pending) return;
-    const today = todayISO();
-    startTransition(async () => {
-      const id = await createPlan({
-        title: t,
-        kind,
-        startDate: today,
-        endDate: kind === "routine" && months < 1 ? addDaysISO(today, 30) : addMonthsISO(today, months),
-        color: pickColor(),
-      });
-      setTitle("");
-      onCreated(id);
-    });
-  }
-
-  return (
-    <div className="rounded-xl border border-dashed transition-colors focus-within:border-solid focus-within:border-foreground/30">
-      <div className="flex items-center gap-3 px-4">
-        {pending ? (
-          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-        ) : (
-          <Plus className="size-4 shrink-0 text-muted-foreground" />
-        )}
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
-          }}
-          placeholder="أضف خطة… ثم Enter — تبدأ اليوم وتتفصّل لاحقًا"
-          className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        />
-      </div>
-      <div
-        className={cn(
-          "flex-wrap items-center gap-1.5 border-t px-3 py-2",
-          title ? "flex" : "hidden",
-        )}
-      >
-        {(
-          [
-            ["project", "مشروع"],
-            ["routine", "روتين"],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setKind(k)}
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-xs transition-colors",
-              kind === k
-                ? "border-foreground/30 bg-secondary text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-accent",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-        <span className="mx-1 h-4 w-px bg-border" />
-        {[1, 2, 3, 6].map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMonths(m)}
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-xs transition-colors",
-              months === m
-                ? "border-foreground/30 bg-secondary text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-accent",
-            )}
-            data-numeric
-          >
-            {m === 1 ? "شهر" : m === 2 ? "شهران" : `${m} أشهر`}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ProjectBar({
-  plan,
-  span,
-  today,
-  onOpen,
-}: {
-  plan: PlanWithDetail;
-  span: NonNullable<ReturnType<typeof barSpan>>;
-  today: string;
-  onOpen: () => void;
-}) {
   const hex = planHex(plan.color);
-  const widthPct = ((span.to - span.from + 1) / WEEKS) * 100;
-  const startPct = (span.from / WEEKS) * 100;
+  const count = plan.checkDays.length;
+  const met = count >= plan.cadence;
 
   return (
-    <div className="absolute inset-y-0 flex items-center" style={{ insetInlineStart: `${startPct}%`, width: `${widthPct}%` }}>
-      <button
-        type="button"
-        onClick={onOpen}
-        className={cn("relative w-full cursor-pointer", plan.depth === 1 ? "h-[22px]" : "h-10")}
-        style={{ ["--c" as string]: hex }}
-        title={plan.title}
-      >
-        <span
-          className={cn(
-            "absolute inset-0 bg-[var(--c)] opacity-[0.13]",
-            span.clippedStart ? "rounded-e-lg" : "rounded-lg",
-            span.clippedEnd && "rounded-s-none rounded-e-lg",
-          )}
-        />
-        <span
-          className="absolute inset-y-0 start-0 rounded-lg bg-[var(--c)] opacity-30"
-          style={{ width: `${Math.round(plan.progress * 100)}%` }}
-        />
-        {plan.milestones.map((m) => {
-          const late = !m.done && m.dueDate < today;
+    <div className={cn("flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3.5", !first && "border-t")}>
+      <span className="flex min-w-40 items-center gap-2.5 text-[15px] font-bold">
+        <span className="size-[11px] shrink-0 rotate-45 rounded-[2.5px]" style={{ background: hex }} />
+        <span className="min-w-0 truncate">{plan.title}</span>
+      </span>
+
+      <span className="flex items-center gap-2">
+        {weekDays.map((day) => {
+          const hit = plan.checkDays.includes(day);
+          const future = day > today;
+          const isToday = day === today;
           return (
-            <span
-              key={m.id}
-              title={`${m.title} — ${dueLabel(m.dueDate, today)}${late ? " (متأخر!)" : m.done ? " ✓" : ""}`}
-              className={cn(
-                "absolute top-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border-2",
-                plan.depth === 1 ? "size-[9px]" : "size-[13px]",
-                late
-                  ? "border-destructive bg-destructive"
-                  : m.done
-                    ? "border-[var(--c)] bg-[var(--c)]"
-                    : "border-[var(--c)] bg-background",
-              )}
-              style={{ insetInlineStart: `${milestonePct(m.dueDate, plan.startDate, plan.endDate)}%` }}
-            />
+            <span key={day} className="flex flex-col items-center gap-0.5">
+              <button
+                type="button"
+                disabled={future}
+                aria-label={dueLabel(day, today)}
+                title={dueLabel(day, today)}
+                onClick={() => startTransition(() => toggleRoutineCheck(plan.id, day))}
+                className={cn(
+                  "size-[17px] rounded-full border-[1.5px] transition-colors",
+                  hit ? "border-transparent" : "border-border",
+                  isToday && !hit && "border-foreground",
+                  future ? "border-dashed opacity-50" : "hover:border-foreground/60",
+                )}
+                style={hit ? { background: hex } : undefined}
+              />
+              <span className="text-[9.5px] text-muted-foreground">{dayLetterFmt.format(new Date(day + "T00:00:00Z"))}</span>
+            </span>
           );
         })}
+      </span>
+
+      <span className="ms-auto text-xs text-muted-foreground" data-numeric>
+        <b className="text-foreground">{count}</b> من {plan.cadence}
+        {met ? " — أتممت هدف الأسبوع ✓" : " هذا الأسبوع"}
+      </span>
+
+      <button
+        type="button"
+        onClick={() => startTransition(() => toggleRoutineCheck(plan.id))}
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-xs transition-colors",
+          plan.checkedToday
+            ? "bg-secondary text-muted-foreground"
+            : "font-bold text-muted-foreground hover:border-foreground hover:text-foreground",
+        )}
+      >
+        {plan.checkedToday ? "✓ تمت اليوم" : "اليوم؟"}
+      </button>
+
+      <button
+        type="button"
+        aria-label="تحرير الروتين"
+        onClick={onEdit}
+        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Pencil className="size-3.5" />
       </button>
     </div>
   );
 }
 
-function RoutineRibbon({
-  plan,
-  span,
-  win,
-  onOpen,
-}: {
-  plan: PlanWithDetail;
-  span: NonNullable<ReturnType<typeof barSpan>>;
-  win: TimelineWindow;
-  onOpen: () => void;
-}) {
-  const hex = planHex(plan.color);
+// ── done & archived ──────────────────────────────────────────────────────────
+
+const inactiveDateFmt = new Intl.DateTimeFormat("ar-u-nu-latn", {
+  timeZone: "Asia/Riyadh",
+  day: "numeric",
+  month: "long",
+});
+
+/** Nothing vanishes: أنجزتها/أرشفة land here, one click away from استعادة. */
+function InactiveDrawer({ plans }: { plans: InactivePlan[] }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="absolute inset-y-0 grid w-full cursor-pointer items-center gap-[3px]"
-      style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)`, ["--c" as string]: hex }}
-      title={plan.title}
-    >
-      {win.weekStarts.map((w, i) => {
-        const inRange = i >= span.from && i <= span.to;
-        if (!inRange) return <span key={w} />;
-        const fill = plan.weekFills[i] ?? 0;
-        const ratio = Math.min(1, fill / plan.cadence);
-        const isPast = i < win.todayWeek;
-        const missed = isPast && fill === 0;
-        const isFuture = i > win.todayWeek;
-        return (
-          <span
-            key={w}
-            title={
-              isFuture
-                ? "قادم"
-                : `${fill}/${plan.cadence} هذا الأسبوع${missed ? " — انقطاع!" : ""}`
-            }
-            className={cn(
-              "relative h-10 overflow-hidden rounded-md",
-              isFuture ? "bg-secondary/50 [background-image:repeating-linear-gradient(-45deg,transparent_0_5px,white_5px_10px)]" : "bg-secondary",
-              missed && "outline-dashed outline-[1.5px] -outline-offset-[1.5px] outline-destructive/50",
-            )}
-          >
-            {ratio > 0 ? (
-              <span
-                className="absolute inset-x-0 bottom-0 block bg-[var(--c)]"
-                style={{ height: `${Math.round(ratio * 100)}%`, opacity: 0.35 + ratio * 0.4 }}
-              />
-            ) : null}
-          </span>
-        );
-      })}
-    </button>
+    <details className="group/done rounded-xl border border-dashed">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3.5 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-4 transition-transform group-open/done:rotate-180" />
+        المنجزة والمؤرشفة
+        <b data-numeric>({plans.length})</b>
+      </summary>
+      <div className="space-y-1 px-4 pb-3">
+        {plans.map((p) => (
+          <InactiveRow key={p.id} plan={p} />
+        ))}
+      </div>
+    </details>
   );
 }
 
-function RoutineToday({ plan }: { plan: PlanWithDetail }) {
+function InactiveRow({ plan }: { plan: InactivePlan }) {
   const [, startTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   return (
-    <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-      <TaskCheck
-        done={plan.checkedToday}
-        onToggle={() => startTransition(() => toggleRoutineCheck(plan.id))}
-        className="size-4"
+    <div className="flex flex-wrap items-center gap-3 rounded-lg px-1 py-1.5">
+      <span
+        className="size-2.5 shrink-0 rotate-45 rounded-[2px] opacity-60"
+        style={{ background: planHex(plan.color) }}
       />
-      <span data-numeric>
-        اليوم؟ · هدفك {plan.cadence}× أسبوعيًا
+      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{plan.title}</span>
+      <span className="rounded-full bg-secondary px-2 py-px text-[10.5px] text-muted-foreground">
+        {plan.status === "done" ? "منجزة 🎉" : "مؤرشفة"}
       </span>
+      <span className="text-xs text-muted-foreground" data-numeric>
+        {inactiveDateFmt.format(new Date(plan.updatedAt))}
+      </span>
+      <button
+        type="button"
+        onClick={() => startTransition(() => updatePlan({ id: plan.id, status: "active" }))}
+        className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+      >
+        <ArchiveRestore className="size-3" />
+        استعادة
+      </button>
+      <button
+        type="button"
+        aria-label="حذف نهائي"
+        className={cn(
+          "flex items-center gap-1 rounded-full border border-transparent p-1.5 text-xs text-muted-foreground transition-colors hover:text-destructive",
+          confirmDelete && "border-destructive text-destructive",
+        )}
+        onClick={() => {
+          if (!confirmDelete) {
+            setConfirmDelete(true);
+            setTimeout(() => setConfirmDelete(false), 3000);
+            return;
+          }
+          startTransition(() => deletePlan(plan.id));
+        }}
+      >
+        <Trash2 className="size-3.5" />
+        {confirmDelete ? "متأكد؟" : null}
+      </button>
     </div>
   );
 }
 
-function EmptyCanvas({ onCreate }: { onCreate: () => void }) {
+// ── empty ────────────────────────────────────────────────────────────────────
+
+function EmptyCockpit() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
+    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed px-6 py-16 text-center">
       <p className="text-sm text-muted-foreground">
-        خارطتك فاضية — ارسم أول خطة على الزمن: مشروع بمعالم، أو روتين أسبوعي.
+        قمرتك فاضية — أنشئ أول مشروع بمعالم، أو روتينًا أسبوعيًا.
       </p>
       <button
         type="button"
-        onClick={onCreate}
-        className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        onClick={() => window.dispatchEvent(new CustomEvent("hq:plan-composer"))}
+        className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-[13px] font-bold text-primary-foreground transition-opacity hover:opacity-90"
       >
-        <Plus className="size-4" />
+        <Plus className="size-4" strokeWidth={2.4} />
         خطة جديدة
+        <kbd className="rounded bg-primary-foreground/20 px-1.5 text-[10px]" dir="ltr">
+          P
+        </kbd>
       </button>
     </div>
   );

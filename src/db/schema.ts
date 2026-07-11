@@ -212,11 +212,57 @@ export const routineChecks = pgTable(
   (t) => [uniqueIndex("routine_day_uq").on(t.planId, t.day)],
 );
 
+/** سجل الدفعات — every completed next step, a plan's momentum history. */
+export const planSteps = pgTable(
+  "plan_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    doneAt: timestamp("done_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("plan_steps_plan_idx").on(t.planId, t.doneAt)],
+);
+
 /** Captured ideas — unprocessed by definition; the strip nags until sorted. */
 export const ideas = pgTable("ideas", {
   id: uuid("id").primaryKey().defaultRandom(),
   text: text("text").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ── نبض المنصات / platform stats ─────────────────────────────────────────────
+
+/**
+ * One row per platform per day — the growth history behind the sparklines.
+ * Written by machines (StreamBot's snapshot job, the X scraper) through
+ * POST /api/stats/ingest, never by user actions. Metrics shapes:
+ *  - twitch:  { followers, live, viewers?, subs?, lastStreamAt? }
+ *  - discord: { members, online?, voice? }
+ *  - x:       { followers, following?, posts? }
+ */
+export const platformStats = pgTable(
+  "platform_stats",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    platform: text("platform").notNull(), // "twitch" | "discord" | "x"
+    day: date("day").notNull(), // Asia/Riyadh calendar day of the snapshot
+    metrics: jsonb("metrics").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("platform_day_uq").on(t.platform, t.day)],
+);
+
+/**
+ * Current state per platform (live viewers, online-now, X session health) —
+ * one upserted row each, no history. Staleness is judged by updatedAt.
+ */
+export const platformLive = pgTable("platform_live", {
+  platform: text("platform").primaryKey(),
+  metrics: jsonb("metrics").notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -228,4 +274,7 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type Commitment = typeof commitments.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type Milestone = typeof milestones.$inferSelect;
+export type PlanStep = typeof planSteps.$inferSelect;
 export type Idea = typeof ideas.$inferSelect;
+export type PlatformStat = typeof platformStats.$inferSelect;
+export type PlatformLive = typeof platformLive.$inferSelect;
