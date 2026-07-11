@@ -180,17 +180,22 @@ streambot) via Docker Compose behind Caddy. Full guide: `VPS_SETUP.md`.
 
 ### Applying changes — end every change with the deploy block
 
+**The VPS never builds** — measured 15 MB/s disk writes (healthy: 200–1000),
+so a Next build there starves the box (BuildKit crashed, the live streambot
+lagged). GitHub Actions builds on push to main → ghcr.io/yazanalkamal/hq-{app,
+migrate,xsnap}; the VPS pulls. Never suggest `docker compose build` on the VPS.
+
 ```bash
-# on the VPS, in ~/hq
+# on the VPS, in ~/hq  (after the GitHub Actions build goes green)
 git pull origin main
-docker compose build app
+docker compose pull
 # only if this change added a migration:
 docker compose run --rm migrate
-docker compose up -d app
+docker compose up -d
 docker compose logs -f app     # confirm clean boot
 ```
 
-Migrations MUST run after `build`, before `up -d`. `.env` changes need
+Migrations MUST run after `pull`, before `up -d`. `.env` changes need
 `docker compose down && docker compose up -d` (plain `up -d` doesn't reload
 env). Never imply a change is live until the deploy block ran on the VPS.
 

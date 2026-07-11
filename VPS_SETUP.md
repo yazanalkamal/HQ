@@ -58,15 +58,31 @@ Put the client ID/secret in **both** the VPS `.env` and the Windows `.env`.
 
 ## 3. Database + first deploy
 
+> **The VPS never builds.** Measured 2026-07-11: this box writes at
+> **15 MB/s** (healthy is 200–1000). A Next.js build there starved the
+> whole machine — BuildKit crashed and the live bot lagged. GitHub Actions
+> (`.github/workflows/build.yml`) builds on every push to main; the VPS
+> only *pulls*. Reads run at ~73 MB/s, which is fine for that.
+
+One-time: let the VPS read from GHCR. Create a GitHub PAT (classic) with
+**`read:packages`** only, then:
+
 ```bash
+echo '<PAT>' | docker login ghcr.io -u yazanalkamal --password-stdin
+```
+
+Then, every deploy — including the first:
+
+```bash
+docker compose pull                   # app + xsnap + migrate images
 docker compose up -d postgres
 docker compose run --rm migrate       # applies drizzle/ migrations
-docker compose up -d --build app
+docker compose up -d app xsnap
 docker compose logs -f app            # expect "Ready" from next start
 ```
 
 The app listens on **127.0.0.1:3100** only — nothing is internet-reachable
-until Caddy fronts it.
+until Caddy fronts it. `xsnap` logs "no session" until §7 seeds it.
 
 ## 4. HTTPS — via streambot's caddy (this VPS's reality)
 
@@ -90,14 +106,19 @@ Any other Google account gets `denied` (and lands in the /admin audit log).
 
 ## 5. Updating (every deploy)
 
+Push to `main` → GitHub Actions builds → wait for the green check, then:
+
 ```bash
 cd ~/hq
-git pull origin main
-docker compose build app
+git pull origin main                # compose file / migrations
+docker compose pull                 # the freshly built images
 docker compose run --rm migrate     # only if the change added a migration
-docker compose up -d app
+docker compose up -d
 docker compose logs -f app
 ```
+
+Never `--build` here. Roll back by pinning `HQ_TAG=<git-sha>` in `.env`
+and re-running `docker compose up -d`.
 
 `.env` edits: `docker compose down && docker compose up -d` (plain `up -d`
 won't reload env).

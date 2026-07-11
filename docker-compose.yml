@@ -1,6 +1,15 @@
 # Production compose for the VPS.
-# No database ports are published; the app listens on 127.0.0.1 only —
-# Caddy (host) terminates HTTPS for hq.al-kamal.net and proxies to it.
+#
+# The VPS NEVER BUILDS. Its disk writes at ~15 MB/s, so compiling there
+# starved the whole box (BuildKit crashed mid-build; the live bot lagged).
+# GitHub Actions builds and pushes the images (.github/workflows/build.yml)
+# and the VPS only pulls them — a sequential read, which this disk handles:
+#
+#   docker compose pull && docker compose up -d
+#
+# Pin or roll back with HQ_TAG=<git-sha> in .env (default: latest).
+# To build an image by hand on a FAST machine (not the VPS):
+#   docker build --target runner -t ghcr.io/yazanalkamal/hq-app:latest .
 #
 # NOTE: docker-compose.override.yml is LOCAL DEV ONLY (publishes the DB port)
 # and is git-ignored — it must never reach the VPS. (Same rule as streambot.)
@@ -22,9 +31,7 @@ services:
       retries: 10
 
   app:
-    build:
-      context: .
-      target: runner
+    image: ghcr.io/yazanalkamal/hq-app:${HQ_TAG:-latest}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hq}:${POSTGRES_PASSWORD:-hq}@postgres:5432/${POSTGRES_DB:-hq}
@@ -47,9 +54,7 @@ services:
 
   # One-off migration runner:  docker compose run --rm migrate
   migrate:
-    build:
-      context: .
-      target: migrate
+    image: ghcr.io/yazanalkamal/hq-migrate:${HQ_TAG:-latest}
     profiles: ["tools"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hq}:${POSTGRES_PASSWORD:-hq}@postgres:5432/${POSTGRES_DB:-hq}
@@ -60,7 +65,7 @@ services:
   # X (@POGYaz) stats scraper — نبض المنصات. The logged-in session lives in
   # the xsnap-state volume; seed it once via xsnap/login.mjs (see its header).
   xsnap:
-    build: ./xsnap
+    image: ghcr.io/yazanalkamal/hq-xsnap:${HQ_TAG:-latest}
     restart: unless-stopped
     environment:
       HQ_STATS_URL: http://app:3000
