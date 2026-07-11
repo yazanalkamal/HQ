@@ -38,6 +38,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      default: {}
+      # shared with streambot's caddy container, which owns 80/443 on the
+      # VPS and serves the hq.al-kamal.net vhost → hq-app:3000
+      edge:
+        aliases: [hq-app]
 
   # One-off migration runner:  docker compose run --rm migrate
   migrate:
@@ -68,3 +74,9 @@ services:
 volumes:
   pgdata:
   xsnap-state:
+
+networks:
+  default: {}
+  # created once per machine: docker network create edge
+  edge:
+    external: true

@@ -14,7 +14,7 @@ ufw with only SSH open, Docker + Compose installed).
 - DNS: **A record `hq.al-kamal.net` → VPS IP** (if Cloudflare, gray-cloud it
   at least until the first certificate issues).
 - Google OAuth client (see §2).
-- Caddy on the VPS (§4 covers both "already have it" and "install fresh").
+- HTTPS is served by streambot's caddy container (§4) — no host Caddy.
 
 ## 1. Get the code & env
 
@@ -33,6 +33,8 @@ Set in `.env`:
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from §2 |
 | `ALLOWED_EMAIL` | `yazan@al-kamal.net` |
 | `APP_URL` | `https://hq.al-kamal.net` |
+| `STATS_INGEST_SECRET` | `openssl rand -hex 32` — same value goes into streambot's `.env` as `HQ_STATS_SECRET` |
+| `X_HANDLE` | `POGYaz` |
 
 `DATABASE_URL` is NOT needed on the VPS — compose wires the internal
 `postgres` hostname itself. **Do not copy `docker-compose.override.yml` to
@@ -66,24 +68,22 @@ docker compose logs -f app            # expect "Ready" from next start
 The app listens on **127.0.0.1:3100** only — nothing is internet-reachable
 until Caddy fronts it.
 
-## 4. Caddy vhost (HTTPS)
+## 4. HTTPS — via streambot's caddy (this VPS's reality)
 
-Snippet lives in `deploy/Caddyfile.snippet`.
-
-**If Caddy is already installed** (host service): append the snippet to
-`/etc/caddy/Caddyfile`, then `sudo systemctl reload caddy`.
-
-**If not yet installed:**
+Ports 80/443 on this VPS are owned by **streambot's caddy container**, so
+the `hq.al-kamal.net` vhost lives in *that* repo's `Caddyfile` (already
+committed there), and the two compose projects share an external docker
+network named `edge`:
 
 ```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudflare.com/keys/caddy-stable.asc' >/dev/null 2>&1 # (use official docs if key URL changed)
-# official: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
-sudo apt install -y caddy
-sudo ufw allow 80,443/tcp
-cat deploy/Caddyfile.snippet | sudo tee -a /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+docker network create edge          # once per host (errors if it exists — fine)
+cd ~/streambot && git pull          # brings the vhost + edge-network compose change
+docker compose up -d caddy          # recreates caddy attached to `edge`
 ```
+
+HQ's `docker-compose.yml` already joins `edge` and exposes the app to
+caddy as `hq-app:3000`. (`deploy/Caddyfile.snippet` stays as reference
+for a future standalone-Caddy setup.)
 
 Then open https://hq.al-kamal.net → sign in with Google → you're in.
 Any other Google account gets `denied` (and lands in the /admin audit log).

@@ -1,5 +1,14 @@
-# Add this vhost to the VPS Caddyfile (auto-HTTPS via Let's Encrypt).
-# DNS: A record  hq.al-kamal.net → VPS IP  (proxy off if using Cloudflare orange cloud, at least for first issuance)
+# hq.al-kamal.net vhost.
+#
+# ON THIS VPS: ports 80/443 are owned by STREAMBOT's caddy container, so
+# the live copy of this vhost is in streambot's Caddyfile (already added
+# there). Both compose projects join the external `edge` docker network
+# (`docker network create edge`, once per host) and caddy proxies to the
+# HQ app's network alias `hq-app`.
+#
+# The block below is the reference for a standalone/host Caddy setup —
+# there the target is 127.0.0.1:3100 (the loopback-published app port)
+# instead of hq-app:3000.
 
 hq.al-kamal.net {
 	encode zstd gzip
