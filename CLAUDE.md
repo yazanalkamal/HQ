@@ -201,26 +201,32 @@ streambot) via Docker Compose behind Caddy. Full guide: `VPS_SETUP.md`.
 - Prod state (users/sessions/tasks data, audit log) lives in the VPS
   Postgres — reason about PROD STATE, not the dev checkout.
 
-### Applying changes — end every change with the deploy block
+### Applying changes — YOU deploy every release yourself over SSH
 
 **The VPS never builds** — measured 15 MB/s disk writes (healthy: 200–1000),
 so a Next build there starves the box (BuildKit crashed, the live streambot
 lagged). GitHub Actions builds on push to main → ghcr.io/yazanalkamal/hq-{app,
 migrate,xsnap}; the VPS pulls. Never suggest `docker compose build` on the VPS.
 
+After pushing to main, WAIT for the GitHub Actions build to go green
+(`gh run watch`), then run the deploy YOURSELF over SSH (`ssh myvps`, app in
+`~/hq`) — explicit user standing order 2026-07-12, don't ask each time:
+
 ```bash
-# on the VPS, in ~/hq  (after the GitHub Actions build goes green)
-git pull origin main
-docker compose pull
-# only if this change added a migration:
-docker compose run --rm migrate
-docker compose up -d
-docker compose logs -f app     # confirm clean boot
+ssh myvps "cd ~/hq && git pull origin main && docker compose pull"
+# only if this change added a migration — NOTE the profile: plain
+# `compose pull` SKIPS the migrate service, and the stale image then
+# "applies successfully" while applying nothing (bit us 2026-07-12):
+ssh myvps "cd ~/hq && docker compose --profile tools pull migrate && docker compose run --rm migrate"
+ssh myvps "cd ~/hq && docker compose up -d"
+ssh myvps "cd ~/hq && docker compose logs --tail 30 app"   # confirm clean boot
 ```
 
-Migrations MUST run after `pull`, before `up -d`. `.env` changes need
+Gotchas: Contabo IPv6 → ghcr.io resets mid-pull — retry `docker compose pull`
+2–3×. Migrations MUST run after `pull`, before `up -d`. `.env` changes need
 `docker compose down && docker compose up -d` (plain `up -d` doesn't reload
-env). Never imply a change is live until the deploy block ran on the VPS.
+env). No passwordless sudo on the VPS. Verify the live site responds after
+`up -d`; never call a change live before that.
 
 ## Working style
 
