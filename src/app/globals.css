@@ -97,6 +97,11 @@
   [data-numeric] {
     font-variant-numeric: tabular-nums lining-nums;
   }
+  /* the desktop quick-add window (/capture): only the composer paints —
+     the native window behind the page is transparent glass */
+  body:has([data-capture-shell]) {
+    background: transparent;
+  }
 }
 
 @layer utilities {

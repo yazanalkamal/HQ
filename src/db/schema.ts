@@ -50,6 +50,22 @@ export const sessions = pgTable(
 );
 
 /**
+ * One-time codes for linking the desktop app («ربط الجهاز» in /admin).
+ * Same storage rule as sessions: the DB keeps only the SHA-256 of the
+ * code. 5-minute expiry, single use — the claim endpoint exchanges a
+ * valid code for a real session.
+ */
+export const deviceLinkCodes = pgTable("device_link_codes", {
+  id: text("id").primaryKey(), // sha256(code), hex
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Append-only audit of every state-changing action (writes, sign-ins,
  * session revocations). Rendered in the Admin page.
  */

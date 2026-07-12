@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // the desktop shell (Tauri) — not part of the Next app
+    "desktop/**",
   ]),
 ]);
 

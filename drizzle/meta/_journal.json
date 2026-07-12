@@ -71,6 +71,13 @@
       "when": 1783786149474,
       "tag": "0009_platform-stats",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783842695873,
+      "tag": "0010_device-link-codes",
+      "breakpoints": true
     }
   ]
 }

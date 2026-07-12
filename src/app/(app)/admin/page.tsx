@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { MonitorSmartphone, ScrollText, X } from "lucide-react";
 import { db } from "@/db";
 import { auditLog, sessions } from "@/db/schema";
+import { LinkDeviceCard } from "@/components/admin/link-device-card";
 import { PageHeader } from "@/components/page-header";
 import { getCurrentSession } from "@/lib/auth";
 import { formatDateTime, formatRelative } from "@/lib/format";
@@ -78,6 +79,8 @@ export default async function AdminPage() {
               </li>
             ))}
           </ul>
+
+          <LinkDeviceCard />
         </section>
 
         {/* ── audit log ── */}

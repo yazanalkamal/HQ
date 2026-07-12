@@ -20,6 +20,13 @@ import type { Area } from "@/db/schema";
 const PRIORITIES = ["عادية", "مهمة", "عاجلة"] as const;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
+declare global {
+  interface Window {
+    /** present only inside the desktop shell's webview (Tauri) */
+    __TAURI__?: { core: { invoke: (cmd: string) => Promise<unknown> } };
+  }
+}
+
 export type ComposerPlan = { id: string; title: string; color: string };
 
 /**
@@ -28,14 +35,27 @@ export type ComposerPlan = { id: string; title: string; color: string };
  * event (the «مهمة جديدة» buttons) or the N key anywhere; every option is
  * always visible; Enter adds and keeps it open for chained capture.
  * Default due date follows the board you're looking at.
+ *
+ * variant="capture" is the desktop quick-add window (/capture): always
+ * open, transparent backdrop, and "closing" hides the native window via
+ * the shell's `hide_capture` command — fields reset when it next shows.
  */
-export function TaskComposer({ areas, plans }: { areas: Area[]; plans: ComposerPlan[] }) {
+export function TaskComposer({
+  areas,
+  plans,
+  variant = "overlay",
+}: {
+  areas: Area[];
+  plans: ComposerPlan[];
+  variant?: "overlay" | "capture";
+}) {
+  const capture = variant === "capture";
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(capture);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [priority, setPriority] = useState(0);
@@ -67,7 +87,18 @@ export function TaskComposer({ areas, plans }: { areas: Area[]; plans: ComposerP
     setOpen(true);
   }, [boardDate]);
 
+  // closing: overlay dismisses itself; capture hides the native window —
+  // fields reset on the next show, so a half-typed task never lingers
+  const close = useCallback(() => {
+    if (!capture) {
+      setOpen(false);
+      return;
+    }
+    void window.__TAURI__?.core.invoke("hide_capture");
+  }, [capture]);
+
   useEffect(() => {
+    if (capture) return; // capture wiring below — no N key, no window event
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyN" || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
       const el = document.activeElement as HTMLElement | null;
@@ -84,7 +115,28 @@ export function TaskComposer({ areas, plans }: { areas: Area[]; plans: ComposerP
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("hq:composer", onEvent);
     };
+  }, [capture, openComposer]);
+
+  // capture: reset + refocus every time the shell shows the window
+  // (the webview stays alive while hidden, so mount alone isn't enough).
+  // Through a ref on purpose: openComposer's identity changes on every
+  // revalidation, and re-running this effect then would wipe the
+  // «أُضيفت» count right after an add.
+  const openComposerRef = useRef(openComposer);
+  useEffect(() => {
+    openComposerRef.current = openComposer;
   }, [openComposer]);
+  useEffect(() => {
+    if (!capture) return;
+    openComposerRef.current();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      openComposerRef.current();
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [capture]);
 
   function submit() {
     const t = title.trim();
@@ -104,11 +156,20 @@ export function TaskComposer({ areas, plans }: { areas: Area[]; plans: ComposerP
   const customDate = !!dueDate && dueDate !== today && dueDate !== tomorrow;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[15vh]">
-      {/* backdrop */}
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex items-start justify-center",
+        capture ? "px-2 pt-2" : "px-4 pt-[15vh]",
+      )}
+    >
+      {/* backdrop — in capture it's invisible (the native window is glass)
+          but still catches clicks so tapping empty space hides the bar */}
       <div
-        className="absolute inset-0 bg-foreground/25 backdrop-blur-[2px] animate-in fade-in-0"
-        onClick={() => setOpen(false)}
+        className={cn(
+          "absolute inset-0",
+          !capture && "bg-foreground/25 backdrop-blur-[2px] animate-in fade-in-0",
+        )}
+        onClick={close}
       />
 
       <div
@@ -116,7 +177,7 @@ export function TaskComposer({ areas, plans }: { areas: Area[]; plans: ComposerP
         aria-modal="true"
         aria-label="مهمة جديدة"
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") close();
         }}
         className="relative w-full max-w-xl overflow-hidden rounded-2xl border bg-popover shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-150"
       >
@@ -245,7 +306,7 @@ export function TaskComposer({ areas, plans }: { areas: Area[]; plans: ComposerP
           <span className="flex items-center gap-1.5">
             <Kbd>Enter</Kbd> إضافة وتابع
             <span className="mx-1 text-border">·</span>
-            <Kbd>Esc</Kbd> إغلاق
+            <Kbd>Esc</Kbd> {capture ? "إخفاء" : "إغلاق"}
           </span>
           {added > 0 ? (
             <span key={added} className="font-bold text-foreground animate-in fade-in-0 zoom-in-90" data-numeric>

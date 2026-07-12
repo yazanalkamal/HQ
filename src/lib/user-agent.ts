@@ -2,7 +2,9 @@
 export function describeUserAgent(ua: string): string {
   if (!ua) return "جهاز غير معروف";
 
-  const browser = ua.includes("Edg/")
+  const browser = ua.includes("HQDesktop/")
+    ? "تطبيق المقر"
+    : ua.includes("Edg/")
     ? "Edge"
     : ua.includes("OPR/")
       ? "Opera"

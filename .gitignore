@@ -41,6 +41,11 @@ yarn-error.log*
 # local-dev compose override — publishes the DB port, must NEVER reach the VPS
 docker-compose.override.yml
 
+# desktop shell (Tauri) — build outputs; built locally on the dev PC, never in CI
+desktop/node_modules
+desktop/src-tauri/target
+desktop/src-tauri/gen
+
 # vercel
 .vercel
 

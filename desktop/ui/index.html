@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>ربط الجهاز — المقر</title>
+<style>
+  /* HQ palette (globals.css), system UI font — Thmanyah lives in the web app */
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --secondary: oklch(0.97 0 0);
+    --border: oklch(0.922 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    user-select: none;
+  }
+  main { width: 100%; max-width: 340px; display: grid; gap: 18px; }
+  h1 { font-size: 20px; font-weight: 700; }
+  ol {
+    display: grid; gap: 8px;
+    padding-inline-start: 20px;
+    font-size: 13px; line-height: 1.8;
+    color: var(--muted-foreground);
+  }
+  ol b { color: var(--foreground); font-weight: 600; }
+  input {
+    font: inherit;
+    direction: ltr; text-align: center;
+    font-size: 22px; font-weight: 700;
+    letter-spacing: 0.25em;
+    font-variant-numeric: tabular-nums;
+    text-transform: uppercase;
+    width: 100%; height: 52px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--secondary);
+    color: var(--foreground);
+    outline: none;
+  }
+  input:focus { border-color: var(--foreground); background: var(--background); }
+  input::placeholder { color: var(--border); letter-spacing: 0.25em; }
+  button {
+    font: inherit; font-weight: 600; font-size: 14px;
+    height: 44px; border: 0; border-radius: 12px;
+    background: var(--foreground); color: var(--background);
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status { min-height: 20px; font-size: 13px; color: var(--muted-foreground); text-align: center; }
+  #status.error { color: var(--destructive); }
+</style>
+</head>
+<body>
+  <main>
+    <h1>ربط الجهاز</h1>
+    <ol>
+      <li>افتح المقر في المتصفح ← <b>الإدارة</b></li>
+      <li>اضغط <b>«إنشاء رمز ربط»</b></li>
+      <li>اكتب الرمز هنا خلال <span dir="ltr">5</span> دقائق</li>
+    </ol>
+    <input id="code" placeholder="XXXX-XXXX" maxlength="9" autocomplete="off" spellcheck="false">
+    <button id="go">ربط الجهاز</button>
+    <p id="status"></p>
+  </main>
+
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen } = window.__TAURI__.event;
+
+  const code = document.getElementById("code");
+  const go = document.getElementById("go");
+  const status = document.getElementById("status");
+
+  function setStatus(text, isError) {
+    status.textContent = text;
+    status.classList.toggle("error", !!isError);
+  }
+
+  async function submit() {
+    const value = code.value.trim();
+    if (!value) { setStatus("اكتب الرمز أولًا.", true); return; }
+    setStatus("جارٍ الربط…", false);
+    go.disabled = true;
+    try {
+      await invoke("link_device", { code: value });
+      // success closes this window from the shell; errors come back
+      // through the link-status event after the claim round-trip
+    } catch (err) {
+      setStatus(String(err), true);
+      go.disabled = false;
+    }
+  }
+
+  go.addEventListener("click", submit);
+  code.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") invoke("close_link"); });
+  listen("link-status", (event) => { setStatus(event.payload, true); go.disabled = false; });
+  code.focus();
+</script>
+</body>
+</html>

@@ -115,6 +115,11 @@ components as props — the client module must import them itself.
   UX, the dependency is the control.
 - **Every state-changing action must call `audit(...)`** (`src/lib/audit.ts`
   → `audit_log`, rendered in /admin).
+- **Desktop sessions — «ربط الجهاز»:** Google blocks OAuth in webviews, so
+  /admin mints a 5-min single-use code (`device_link_codes`, hashed like
+  sessions; `src/lib/auth/device.ts`) and `GET /api/device/claim?code=`
+  (proxy-exempt) exchanges it for a normal revocable session. The desktop
+  shell sends UA marker `HQDesktop/` → shown as «تطبيق المقر» in /admin.
 
 ## Commands
 
@@ -146,6 +151,13 @@ Features are verified in a REAL browser before "done": playwright-core with
 4. Gotchas already hit: the quick-add chips overlay can cover the first
    row while the input is focused (press Escape first); Playwright clicks
    during revalidation can land on stale layout — wait ~1.5s after writes.
+5. Desktop shell: launch with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=
+   "--remote-debugging-port=9223"` and drive the webviews over raw CDP
+   (Playwright's connectOverCDP misreads WebView2 targets). Assert window
+   visibility with Win32 `IsWindowVisible`, not `document.visibilityState`.
+   Synthetic SendKeys dies silently when the foreground window is elevated
+   or the PC is locked — `--quick` via single-instance is the reliable
+   test hook.
 
 ## Feature-map (where things live)
 
@@ -165,6 +177,17 @@ Features are verified in a REAL browser before "done": playwright-core with
   new-task-button, task-panel sheet, areas)
 - Shell: `src/components/shell/` (sidebar, command palette Ctrl+K, search
   button); `/api/search` feeds the palette
+- Desktop (Windows): `desktop/` — Tauri tray shell (see `desktop/README.md`;
+  built LOCALLY only, never CI/VPS). Ctrl+Shift+A (or `hq-desktop.exe
+  --quick`) toggles a frameless transparent always-on-top window on
+  `/capture` — the task composer in `variant="capture"` (always open, page
+  transparent via `data-capture-shell`, Esc hides through the remote-IPC
+  `hide_capture` command, shell reloads the page after hiding so the next
+  summon is instant AND fresh). Tray click opens the full site as a window.
+  Hard-won gotchas: never create/close windows inside `on_navigation`
+  (WebView2 reentrancy aborts the navigation); blur-hide needs a ~600ms
+  grace after show or it re-hides instantly; `document.visibilityState`
+  never changes on window hide/show in WebView2.
 
 ## Dev (Windows) vs Prod (VPS)
 

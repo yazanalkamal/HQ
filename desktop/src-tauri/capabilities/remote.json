@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote-capture",
+  "description": "The /capture page (remote HQ) may ask the shell to hide the quick-add window — nothing else.",
+  "windows": ["capture"],
+  "remote": {
+    "urls": ["https://hq.al-kamal.net", "http://localhost:3000"]
+  },
+  "permissions": ["allow-hide-capture"]
+}

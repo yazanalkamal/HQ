@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local-link",
+  "description": "The bundled link-device page: invoke linking commands + listen for status events.",
+  "windows": ["link"],
+  "permissions": ["core:default", "allow-link-device", "allow-close-link"]
+}

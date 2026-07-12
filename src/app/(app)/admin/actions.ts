@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { createDeviceLinkCode } from "@/lib/auth/device";
 import {
   deleteSessionCookie,
   invalidateSession,
@@ -35,4 +36,22 @@ export async function revokeSessionAction(formData: FormData): Promise<void> {
   }
 
   revalidatePath("/admin");
+}
+
+/** Mint a one-time code for linking the desktop app (5 min, single use). */
+export async function createDeviceLinkAction(): Promise<{
+  code: string;
+  expiresAt: string;
+}> {
+  const { user } = await requireUser();
+  const { code, expiresAt } = await createDeviceLinkCode(user.id);
+
+  await audit({
+    actor: user.email,
+    action: "device.link_code",
+    entity: "device",
+    ip: (await requestMeta()).ip,
+  });
+
+  return { code, expiresAt: expiresAt.toISOString() };
 }

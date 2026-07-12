@@ -8,6 +8,7 @@ const ERRORS: Record<string, string> = {
   denied: "هذا الحساب غير مسموح له بالدخول.",
   state: "انتهت صلاحية محاولة الدخول — جرّب مرة أخرى.",
   exchange: "تعذّر إتمام الدخول مع Google — جرّب مرة أخرى.",
+  device: "رمز الربط غير صالح أو انتهت مدته — أنشئ رمزًا جديدًا من الإدارة.",
 };
 
 export default async function SignInPage({

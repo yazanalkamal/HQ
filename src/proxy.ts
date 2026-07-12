@@ -15,7 +15,10 @@ export function proxy(request: NextRequest) {
     pathname.startsWith("/api/auth/") ||
     // machine ingest (StreamBot / xsnap) — no cookie by design; the route
     // itself enforces the STATS_INGEST_SECRET bearer
-    pathname === "/api/stats/ingest";
+    pathname === "/api/stats/ingest" ||
+    // desktop-app linking — no cookie yet by design; the one-time code
+    // from /admin is the credential, the route mints the session
+    pathname === "/api/device/claim";
 
   if (!hasSession && !isPublic) {
     const url = request.nextUrl.clone();
