@@ -61,6 +61,8 @@ export function TaskComposer({
   const [priority, setPriority] = useState(0);
   const [areaId, setAreaId] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
+  const [areaOpen, setAreaOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [added, setAdded] = useState(0);
   const [pending, startTransition] = useTransition();
 
@@ -83,6 +85,8 @@ export function TaskComposer({
     setPriority(0);
     setAreaId(null);
     setPlanId(null);
+    setAreaOpen(false);
+    setPlanOpen(false);
     setAdded(0);
     setOpen(true);
   }, [boardDate]);
@@ -138,6 +142,20 @@ export function TaskComposer({
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [capture]);
 
+  // chord-opened menus need focus moved into them — opening via the
+  // controlled prop (unlike via the trigger) leaves focus in the input,
+  // and arrows/Enter would never reach the menu
+  function toggleMenu(isOpen: boolean, setOpen: (v: boolean) => void) {
+    if (isOpen) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    setTimeout(() => {
+      document.querySelector<HTMLElement>("[role=menu]")?.focus();
+    }, 50);
+  }
+
   function submit() {
     const t = title.trim();
     if (!t || pending) return;
@@ -177,7 +195,36 @@ export function TaskComposer({
         aria-modal="true"
         aria-label="مهمة جديدة"
         onKeyDown={(e) => {
-          if (e.key === "Escape") close();
+          if (e.key === "Escape") {
+            // an open dropdown owns this Esc — it closes itself via Radix
+            if (areaOpen || planOpen || e.defaultPrevented) return;
+            close();
+            return;
+          }
+          // keyboard-first controls: Ctrl + the key badged on each button.
+          // e.code = physical key, so it works on Arabic layout too.
+          if (!e.ctrlKey || e.metaKey || e.altKey) return;
+          const action: Record<string, () => void> = {
+            // numbered in the buttons' visual order
+            Digit1: () => setDueDate(today),
+            Digit2: () => setDueDate(tomorrow),
+            Digit3: () => dateRef.current?.showPicker(),
+            Digit4: () => setDueDate(null),
+            KeyP: () => setPriority((p) => (p + 1) % 3),
+            KeyM: () => {
+              if (areas.length > 0) toggleMenu(areaOpen, setAreaOpen);
+            },
+            // stays ahead of the Ctrl+K palette — stopPropagation below
+            KeyK: () => {
+              if (plans.length > 0) toggleMenu(planOpen, setPlanOpen);
+            },
+          };
+          const run = action[e.code];
+          if (run) {
+            e.preventDefault();
+            e.stopPropagation();
+            run();
+          }
         }}
         className="relative w-full max-w-xl overflow-hidden rounded-2xl border bg-popover shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-150"
       >
@@ -209,17 +256,17 @@ export function TaskComposer({
         {/* options — all of them, always visible */}
         <div className="flex flex-wrap items-center gap-2.5 border-t px-4 py-3">
           <div className="flex gap-0.5 rounded-full bg-secondary p-[3px]">
-            <SegBtn active={dueDate === today} onClick={() => setDueDate(today)}>
+            <SegBtn active={dueDate === today} hint="1" onClick={() => setDueDate(today)}>
               اليوم
             </SegBtn>
-            <SegBtn active={dueDate === tomorrow} onClick={() => setDueDate(tomorrow)}>
+            <SegBtn active={dueDate === tomorrow} hint="2" onClick={() => setDueDate(tomorrow)}>
               غدًا
             </SegBtn>
-            <SegBtn active={customDate} onClick={() => dateRef.current?.showPicker()}>
+            <SegBtn active={customDate} hint="3" onClick={() => dateRef.current?.showPicker()}>
               <CalendarDays className="size-3" />
               {customDate ? dueLabel(dueDate!, today) : "تاريخ آخر"}
             </SegBtn>
-            <SegBtn active={dueDate === null} onClick={() => setDueDate(null)}>
+            <SegBtn active={dueDate === null} hint="4" onClick={() => setDueDate(null)}>
               بدون تاريخ
             </SegBtn>
           </div>
@@ -236,17 +283,18 @@ export function TaskComposer({
 
           <Chip
             active={priority > 0}
+            hint="P"
             className={cn(priority === 2 && "text-destructive")}
-            onClick={() => setPriority((priority + 1) % 3)}
+            onClick={() => setPriority((p) => (p + 1) % 3)}
           >
             <Flag className="size-3" />
             {PRIORITIES[priority]}
           </Chip>
 
           {areas.length > 0 ? (
-            <DropdownMenu>
+            <DropdownMenu open={areaOpen} onOpenChange={setAreaOpen}>
               <DropdownMenuTrigger asChild>
-                <Chip active={!!selectedArea}>
+                <Chip active={!!selectedArea} hint="M">
                   <span
                     className={cn(
                       "size-2 rounded-full",
@@ -256,7 +304,13 @@ export function TaskComposer({
                   {selectedArea ? selectedArea.name : "المجال"}
                 </Chip>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent
+                align="start"
+                onCloseAutoFocus={(e) => {
+                  e.preventDefault();
+                  inputRef.current?.focus();
+                }}
+              >
                 {areas.map((a) => (
                   <DropdownMenuItem key={a.id} selected={areaId === a.id} onSelect={() => setAreaId(a.id)}>
                     <span className="flex items-center gap-2">
@@ -272,9 +326,9 @@ export function TaskComposer({
           ) : null}
 
           {plans.length > 0 ? (
-            <DropdownMenu>
+            <DropdownMenu open={planOpen} onOpenChange={setPlanOpen}>
               <DropdownMenuTrigger asChild>
-                <Chip active={!!selectedPlan}>
+                <Chip active={!!selectedPlan} hint="K">
                   <span
                     className="inline-block size-2 rotate-45 rounded-[1.5px]"
                     style={{ background: selectedPlan ? planHex(selectedPlan.color) : "var(--border)" }}
@@ -282,7 +336,13 @@ export function TaskComposer({
                   {selectedPlan ? selectedPlan.title : "الخطة"}
                 </Chip>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent
+                align="start"
+                onCloseAutoFocus={(e) => {
+                  e.preventDefault();
+                  inputRef.current?.focus();
+                }}
+              >
                 {plans.map((p) => (
                   <DropdownMenuItem key={p.id} selected={planId === p.id} onSelect={() => setPlanId(p.id)}>
                     <span className="flex items-center gap-2">
@@ -307,6 +367,8 @@ export function TaskComposer({
             <Kbd>Enter</Kbd> إضافة وتابع
             <span className="mx-1 text-border">·</span>
             <Kbd>Esc</Kbd> {capture ? "إخفاء" : "إغلاق"}
+            <span className="mx-1 text-border">·</span>
+            <Kbd>Ctrl</Kbd>+<span>المفتاح المرسوم على الزر</span>
           </span>
           {added > 0 ? (
             <span key={added} className="font-bold text-foreground animate-in fade-in-0 zoom-in-90" data-numeric>
@@ -319,11 +381,25 @@ export function TaskComposer({
   );
 }
 
+/** The Ctrl-chord key, drawn small on the control itself — the UI teaches. */
+function KeyHint({ label }: { label: string }) {
+  return (
+    <span
+      dir="ltr"
+      data-numeric
+      className="rounded border border-current/25 px-[3px] text-[9px] leading-[13px] opacity-60"
+    >
+      {label}
+    </span>
+  );
+}
+
 function SegBtn({
   active,
+  hint,
   children,
   ...props
-}: React.ComponentProps<"button"> & { active?: boolean }) {
+}: React.ComponentProps<"button"> & { active?: boolean; hint?: string }) {
   return (
     <button
       type="button"
@@ -336,16 +412,18 @@ function SegBtn({
       {...props}
     >
       {children}
+      {hint ? <KeyHint label={hint} /> : null}
     </button>
   );
 }
 
 function Chip({
   active,
+  hint,
   className,
   children,
   ...props
-}: React.ComponentProps<"button"> & { active?: boolean }) {
+}: React.ComponentProps<"button"> & { active?: boolean; hint?: string }) {
   return (
     <button
       type="button"
@@ -359,6 +437,7 @@ function Chip({
       {...props}
     >
       {children}
+      {hint ? <KeyHint label={hint} /> : null}
     </button>
   );
 }

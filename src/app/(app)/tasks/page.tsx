@@ -88,9 +88,10 @@ async function DayBoard({
   today: string;
   areaId?: string;
 }) {
-  const [dayTasks, overdue] = await Promise.all([
+  const [dayTasks, overdue, undated] = await Promise.all([
     tasksForDay(selected, areaId),
     selected === today ? tasksOverdue(today, areaId) : Promise.resolve([]),
+    tasksUndated(areaId),
   ]);
 
   const open = dayTasks.filter((t) => !t.done);
@@ -144,6 +145,11 @@ async function DayBoard({
           {total > 0 ? "أنجزت كل شيء — يوم نظيف ✓" : "لا مهام لهذا اليوم."}
         </p>
       )}
+
+      {/* undated ride along under every day — they have no home of their own */}
+      {undated.length > 0 ? (
+        <TaskGroup heading={`بدون تاريخ (${undated.length})`} tasks={undated} />
+      ) : null}
 
       {doneToday.length > 0 ? (
         <details className="group/done rounded-xl border border-dashed">
